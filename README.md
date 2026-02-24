@@ -1,282 +1,288 @@
-# mini-baas (multi-tenant platform)
+# mini-baas — A Self-Adapting, Database-Agnostic Backend-as-a-Service
 
-> Building a BaaS means we aren't building an app; we're building an App Factory. If we have to manually define a Mongoose schema or a NestJSk Controlle everytime a user adds a feature, we've failed
-> at being a BaaS
+> **Core principle:** We are not building an app. We are building an App Factory.
+> Our backend must transform itself at runtime to serve any business model it has never seen before — without a single line of hardcoded schema, controller, or model.
 
-To make the backend "transform itself" and adapt to a business it has never seen before, we need to move away from **static Typing** and move toward **metadata-Driven Architecture**
-
-To get this wroking, we need to master `Dynamic Multi-tenancy` in NestJS. This involves using `SCOPE request`. providers so that every time a reques  hits our server, nestjs knows exactly which user it belongs to and which database/schema to use.
-here is the strategy to achieve this :
 ---
 
-## The metadata Schema
-Instead of writing Code, our users define their business model in a JSON format. We store this define in a "system" database.
+## What This Actually Is
 
-- The concept: A user says, " I want a Book entity with a title and price'  (NUMBER)
-- The storage: we store this in a schemas collection in MongoDB
-- The execution: our nestjs code reads this JSON and tells mongodb: "From now on, treat the collection ' user_23_books' with these validation rules.
+Most backends are static: a developer writes a schema, a controller, a service, and deploys. That works for one product. It breaks completely for a platform.
 
->>>>>>>>>>>>> Now if we want really zero effort and doing script introspection here is what should be done
-### The `introspection` script
-Instead of a manual JSON, we use a script `or a specialized library` that queries the information schema fo the user's database.
-The Tool: Use a library like prisma-introspection (if using Prisma) or a custom script using knex or typeorm-model-generator.
+This BaaS is different. **The backend has zero knowledge of any user's data model at build time.** When a request arrives, the system:
 
-The Process: 1. Your user provides a connection string (postgres://user:pass@host:5432/db).
-2. Your backend runs a "Discovery Job."
-3. It queries Postgres system tables (like information_schema.columns and information_schema.table_constraints).
-4. It generates a Metadata Map that describes every table, column type, and relationship (Foreign Keys).
+1. Reads the user's metadata (their schema definition or their existing database)
+2. Constructs the correct model, query, and validation on the fly
+3. Executes against the right database engine (SQL or NoSQL)
+4. Returns a consistent, typed JSON response to the frontend
 
-To build a truly elite BaaS in 2026, your backend should be Database Agnostic. It shouldn't care which engine is under the hood; it should just know how to talk to it.
+The backend *becomes* the right backend — for each user, on every request.
 
-Here is the strategy for a Multi-Engine Dynamic Backend:
-1. The "Adapter" Pattern Strategy
+---
 
-Instead of writing your NestJS logic for MongoDB specifically, you write it for an Abstract Data Layer.
+## The Two Core Problems We Solve
 
-    How it works: You define a standard interface (e.g., create, find, update).
+### Problem 1 — We Don't Know the Schema Ahead of Time
 
-    The Switch: When a request hits your API, your NestJS TenantInterceptor identifies the user's database type.
+Traditional ORMs require you to define your models before deployment. We cannot do that: every user has a different data model.
 
-    The Execution: It injects either a Mongoose Driver (for NoSQL) or a Knex/Prisma Driver (for SQL).
+**Our solution: Metadata-Driven Architecture**
 
-2. Implementation: The Dynamic "Query Builder"
+Instead of hardcoded models, users define (or we discover) their data model as JSON metadata, stored in our system database. At request time, NestJS reads this metadata and generates a Mongoose model or a Knex query builder on the fly.
 
-Since you won't be writing static models for every user, you need a way to translate API calls into the correct query language.
+```
+User says: "I want a Book entity with title (string) and price (number)"
+              ↓
+We store:  { entity: "book", tenantId: "user_23", fields: [...] }  →  system DB
+              ↓
+Request arrives at GET /api/v1/books
+              ↓
+Backend reads metadata → generates model → executes query → returns JSON
+```
 
-    For SQL (Postgres): Use Knex.js. It is a battle-tested query builder for Node.js. It allows you to write db('users').where({ id: 1 }) which works perfectly for dynamic table names and dynamic columns.
+There is no `BookController`. There is no `BookSchema`. There is only one `DynamicController` and one `DynamicService` that handle every entity for every user.
 
-    For NoSQL (MongoDB): Use the standard MongoDB Node Driver or Mongoose.
+---
 
-    Unified API: Your frontend sends a standard JSON query (like filter: { price: { gt: 100 } }). Your backend "Translator" converts this into either a SQL WHERE price > 100 or a Mongo { price: { $gt: 100 } }.
+### Problem 2 — Users Have Different Database Engines
 
-3. Automatic "Introspection" for Postgres
+Some users have Postgres. Some have MongoDB. Some use Supabase. We cannot force everyone onto the same engine — and we do not want to.
 
-Since you want to avoid manual JSON, here is how you handle the Postgres injection specifically:
+**Our solution: The Adapter Pattern**
 
-    Connection: User provides the Postgres URL.
+We define a single, universal interface that every database engine must implement:
 
-    Introspection: Your backend runs a "Schema Scanner" (using a tool like pg-structure). It reads all table names, column types, and relationships.
-
-    Metadata Cache: You save this "map" of their database.
-
-    Auto-API: Now, when the user calls GET /api/v1/customers, your NestJS service looks at the map, sees that customers exists in their Postgres, and generates the SQL query instantly.
-
-4. The "Hybrid" Architecture
-
-To pull this off in NestJS, your folder structure would look something like this:
-
-    src/engines/
-
-        sql.engine.ts: Handles Knex logic for Postgres/MySQL.
-
-        nosql.engine.ts: Handles Mongoose/Mongo logic.
-
-    src/dynamic-api/
-
-        dynamic.controller.ts: The single entry point for all CRUD.
-
-        dynamic.service.ts: Decides which engine to call based on user config.
-
-The Benefit: "Bring Your Own Database" (BYOD)
-
-By supporting both, you become a competitor to platforms like Supabase (Postgres-centric) and Firebase (NoSQL-centric) simultaneously.
-
-    If the user wants speed and flexibility: They use your hosted MongoDB.
-
-    If the user wants complex relations and data integrity: They connect their existing Postgres.
-    
-## Dnamic Schema injection
-Since we are using MongoDB, we have a massive advantage. it's schemeless by nature. However, for a BaaS, we still want validation:
-- **The strategy**:  we use Mongoose virtuals or Dynamic Model creation.
-- in NestJS, we can create a `Module`that doesn't have hardcoded models, instead, it uses a `connection.model()` factory fucntion
-- When a request comes in for `/api/v1/book`, our middleware looks up the `book` definition for that specific user and generates a mongoose model on the fly.
-
-## Generic controllers & Services
-we won't write `BookController` or `CarController`. We will write one `DynamicController`:
-- we use **path parameters** : `GET /:tenantId/:entityName`
-- our service will look like this:
-1. identify: Get `tenanId` (the user) and `entityName` (the business mode)
-2. Fetch metadata: Get the rules for `entityName` from our `brain`database
-3. Execute: use the dynamic Mongoose model to perform the CRUD operation
-4. Validatae: Run the incomng req.bod through a dynamic validator (like **AJV** or **ZOD**)
-  
-## The "Frontend-to-Backend" Bridge (Automated SDKs)
-how does the frontend `know` what to do ?
-- `real-time Discovery` : Provide a `/discovery` endpoint, When the frontend loads, it hits this endpoint and receives the JSON map of all entities, fields, and permissions
-- The `headless` approach: our BaaS should provide a univeral Client SDK. Instead of `axios.post('/books'), the user's frontend users `baas.storage('books').create({title: 'My book'})`
-The SDK handled the mapping internally
-
-
-## Handling Logic: The "cloud function" Strategy
-if the business model requires logic like `when a book is created, send an email`, we cannot harcode that. 
-- The strategy: we use a hook system or serverless fucntion
-- use a library like `vm2` or `isolated-vm` in Node.js to execute that code in secure sandbox whenever a specific CRUD event occurs.
-
---
-## 
-## How the data source connection works
-User register a data source in our platform. There are several connection modes:
-
-- Mode 1: Direct DB connection (private server) The user gives us a connection string: `postgresql://user:pass@their-server/mydb` our backend connects, runs `INFORMATION_SCHEMA` queries to introspect
-all tables, columns, types, relations, and indexes. It knows the model without anyone telling it anything.
-- Mode 2: Supabase / cloud hosted the user gives us their supabase project URL + service role key. we call supabase's own introspection API or connect directly to the underlying Postgres
-- Mode 3: Manual sceham injection The user pastes or uploads a schema definition (SQL dump, prisma schema, JSON schema, OpenAPI spec). Our backend parses it and builds its internal routing map from that instead of live introspection
-- Mode 4: Existing REST or GraphQL API the user points us to an OpenAPI
-
-# Technical stack:
-
-- typescript
-- nestjs, provides the modular architecture we need to scale
-- mongodb, mongodb flexible schema is perfect for a platform where our users' data structures will vary constantly.
-
-## Infrastructure & orchestration
-Since we are building a service for other developers, our infrastructure needs to be invisible and indestructible.
-- Docker & Kubernetes: Essential for containerizing our nestJS instances. For a Baas, we'll likely need to spin up isolated environments or use a multi-tenant cluster.
-- Terraform / pulumi: "infrastructure as Code" is mandatory. we need to automate the creation of the databases and storage buckets as new customers sign up
-- Edge functions (vercel & cloudfare workers) if our Baas allows users to write custom cloud functions, integrating with an edge provider lets them run logic close to their users without our managing the raw compute
-
-## 2. performance & real-time sync
-A baas is only as goog as its speed.
-- Redis: Use this for caching (to lower MongoDB read costs) and as a message broker
-- BullMQ: This is the gold stander for NestJS background jobs. Use it to handle heavy tasks like sending emails, processigin images, or triggering webhooks without slowing.
-- scoket.io: since users expect real-time data (like firebase), nestjs has excellent build-in support for websockets to push data updates instantlyu to clients
-
-## 3. Identity & Security (The "Auth" layer)
-We don't reinvent the wheel here, our user's security is our biggest liability:
-- Casl: A great library for Attribute-Based Access Control (ABAC). In a BaaS, we need very granular permissions (User A can read but not delete from collection B")
-- Passport.js & JWT: Standard for NestJS, but consider integrating OIDC (OpenID Connect) if we want to allow our users to offer "Logiin with Google/Github) to their end-users
-
-## 4. Storage & Media
-- MinIO or AWS S3: For the "storage" part or our BaaS. MinIO is great if we want to host it ourself and keep it S3-compatible.
-- Cloudinary or Imgix: if our BaaaS includes image optimization as a feature, these APIs handle the heavy lifting of resiszing and compression
-
-## 5. AI & Search 
-- Pineone & MongoDB Atlas Vector Search: To make our BaaS "AI-REady", we must support vector embeedings. This allows our users to build semantic search or recommendaton engines on top of our platform
-- Meilisearch: A much faster and easier alternative to Elastic for providin "search-as-you-type" fucntionality to our user's data
-
-The "BaaS" success rely on using:
-|Feature|Recommended tech|
-|API Documentation|Swagger (Open API) - NestJS generates this automatically|
-|Monitoring|prometheus & grafana for infra; Sentry for error tracking|
-|Database ORM|Mongoose (classic) or Prisma (if we want better type safety with Mongo|
-|Communication|Postmark or Resend for transactional email|
-
-
-## From chatgpt
-
-The Adapter Pattern is the "Secret Sauce" of any BaaS. It allows your core application logic to remain identical, whether the data is sitting in a Postgres table or a MongoDB collection.
-
-In simple terms: Your NestJS Service says, "Hey, find me the user with ID 5," and the Adapter handles the translation into either SELECT * FROM users WHERE id = 5 (SQL) or db.users.find({ _id: 5 }) (NoSQL).
-1. Define the "Unified" Interface
-
-First, you create a TypeScript Interface or Abstract Class. This defines exactly what a "Database" must be able to do in your system. This is the contract.
-TypeScript
-
+```typescript
 // src/common/interfaces/database-adapter.interface.ts
 export interface IDatabaseAdapter {
   connect(connectionString: string): Promise<void>;
-  findOne(collection: string, filter: any): Promise<any>;
-  create(collection: string, data: any): Promise<any>;
-  update(collection: string, id: string, data: any): Promise<any>;
+  findOne(collection: string, filter: Record<string, any>): Promise<any>;
+  findMany(collection: string, filter: Record<string, any>): Promise<any[]>;
+  create(collection: string, data: Record<string, any>): Promise<any>;
+  update(collection: string, id: string, data: Record<string, any>): Promise<any>;
   delete(collection: string, id: string): Promise<boolean>;
+  introspect(): Promise<SchemaMetadata>;
 }
+```
 
-2. Create the Concrete Adapters
+NestJS injects the right adapter at request time based on the user's configuration. **The rest of the codebase never knows which engine it is talking to.** A `findOne` is always a `findOne`, whether it runs as `SELECT * FROM books WHERE id = 5` or `db.books.find({ _id: 5 })`.
 
-Now, you write two different classes that implement that interface.
+---
 
-    The Postgres Adapter: Uses Knex.js or Pool from pg.
+## How the Backend Transforms Itself: The Full Flow
 
-    The Mongo Adapter: Uses the mongodb native driver or Mongoose.
+```
+Incoming request:  GET /api/v1/user_23/books/42
+                              ↓
+           [ TenantInterceptor ] — reads x-tenant-id header
+                              ↓
+           Loads tenant config from system DB:
+           { dbType: "postgresql", uri: "postgres://...", schemaMap: {...} }
+                              ↓
+           [ DatabaseProvider Factory ] — injects PostgresAdapter or MongoAdapter
+                              ↓
+           [ DynamicController ] — receives entity = "books", id = "42"
+                              ↓
+           [ DynamicService ] — fetches metadata for "books" from schema map
+                              ↓
+           Calls: adapter.findOne("books", { id: "42" })
+                              ↓
+           PostgresAdapter translates: SELECT * FROM books WHERE id = 42
+           (or MongoAdapter translates: db.books.findOne({ _id: 42 }))
+                              ↓
+           Transform Layer normalizes the result to consistent JSON
+                              ↓
+                       Response to frontend
+```
 
-Example: The Postgres Adapter (Simplified)
-TypeScript
+No matter which engine is underneath, the frontend always receives the same shape of response. The backend adapted itself.
 
-import { Knex, knex } from 'knex';
+---
 
-export class PostgresAdapter implements IDatabaseAdapter {
-  private db: Knex;
+## How We Discover the Schema (Without Being Told)
 
-  async connect(uri: string) {
-    this.db = knex({ client: 'pg', connection: uri });
-  }
+We support four connection modes. In all cases, the result is the same: a **Metadata Map** that our dynamic system can read.
 
-  async findOne(table: string, filter: any) {
-    // Translates the request into a SQL Query
-    return this.db(table).where(filter).first();
-  }
-  // ... other methods
-}
+| Mode | How it works |
+|------|-------------|
+| **1. Direct DB connection** | User provides a connection string. We run `INFORMATION_SCHEMA` queries (Postgres) or collection inspection (Mongo). We read every table, column type, relation, and index. |
+| **2. Supabase / cloud hosted** | User provides project URL + service role key. We connect directly to the underlying Postgres and run the same introspection. |
+| **3. Manual schema upload** | User pastes or uploads a SQL dump, Prisma schema, JSON schema, or OpenAPI spec. We parse it and build the metadata map from that. |
+| **4. Existing REST/GraphQL API** | User points us at an OpenAPI spec or GraphQL endpoint. We parse the spec to construct the routing and type map. |
 
-3. The "Dynamic Switch" (The Provider Factory)
+The introspection result is always the same internal structure — a `SchemaMetadata` object the rest of the system depends on.
 
-This is where the NestJS magic happens. You use a Factory Provider. When a request comes in, NestJS looks at the user’s configuration and "injects" the correct adapter.
-TypeScript
+---
 
-// src/database/database.provider.ts
-export const DatabaseProvider = {
-  provide: 'DATABASE_ADAPTER',
-  useFactory: async (configService: ConfigService, request: Request) => {
-    const tenantConfig = await configService.getTenantConfig(request.headers['x-tenant-id']);
-    
-    if (tenantConfig.type === 'postgresql') {
-      const adapter = new PostgresAdapter();
-      await adapter.connect(tenantConfig.uri);
-      return adapter;
-    } else {
-      const adapter = new MongoAdapter();
-      await adapter.connect(tenantConfig.uri);
-      return adapter;
-    }
-  },
-  inject: [ConfigService, REQUEST],
-};
+## Database Engine Support: SQL and NoSQL Together
 
-4. Use it in your Controller
+We support both engines simultaneously. Users choose based on their needs:
 
-Now, your API controller doesn't even know which database it's talking to. It just uses the DATABASE_ADAPTER.
-TypeScript
+- **MongoDB (NoSQL):** Maximum flexibility. Schema is validated at runtime via AJV/Zod using the stored metadata. Ideal for users who need speed and evolving data models.
+- **Postgres (SQL):** Full relational integrity, foreign keys, complex joins. Ideal for users with existing structured data or strict compliance requirements.
 
-@Controller(':entity')
+```
+User's choice        Engine injected        Query style
+─────────────────    ───────────────────    ─────────────────────────────────
+MongoDB (hosted)  →  MongoAdapter        →  db.collection.find({ ... })
+Postgres (BYOD)   →  PostgresAdapter     →  knex(table).where({ ... })
+Supabase          →  PostgresAdapter     →  (same, via Postgres connection)
+```
+
+Adding a new engine (MySQL, SQLite, CockroachDB) means writing one new Adapter class. No other code changes.
+
+---
+
+## Architecture Overview
+
+```
+src/
+├── engines/
+│   ├── sql.engine.ts          — Knex-based adapter for Postgres/MySQL
+│   └── nosql.engine.ts        — MongoDB native driver adapter
+│
+├── database/
+│   └── database.provider.ts   — Factory: injects correct adapter per request
+│
+├── dynamic-api/
+│   ├── dynamic.controller.ts  — Single entry point: /:tenantId/:entityName
+│   ├── dynamic.service.ts     — Orchestrates metadata lookup + adapter calls
+│   └── dynamic.validator.ts   — Runtime validation via AJV/Zod from metadata
+│
+├── schema/
+│   ├── introspection.service.ts — Runs DB discovery for all four connection modes
+│   └── metadata.store.ts        — Reads/writes schema metadata to system DB
+│
+├── tenant/
+│   └── tenant.interceptor.ts  — Resolves tenant config from every request
+│
+└── hooks/
+    └── hook.runner.ts         — Executes user-defined cloud functions via isolated-vm
+```
+
+---
+
+## The Generic Controller and Service
+
+We write exactly one controller and one service. They handle every entity for every user.
+
+**Controller** (`/:tenantId/:entityName`)
+```typescript
+@Controller(':entityName')
 export class DynamicController {
   constructor(
     @Inject('DATABASE_ADAPTER') private readonly db: IDatabaseAdapter
   ) {}
 
-  @get(':id')
-  async getOne(@Param('entity') entity: string, @Param('id') id: string) {
-    // This works perfectly for both SQL and NoSQL!
+  @Get(':id')
+  getOne(@Param('entityName') entity: string, @Param('id') id: string) {
+    // Works identically for SQL and NoSQL
     return this.db.findOne(entity, { id });
   }
+
+  @Post()
+  async create(
+    @Param('entityName') entity: string,
+    @Body() body: Record<string, any>
+  ) {
+    // Validate against runtime schema before writing
+    await this.validator.validate(entity, body);
+    return this.db.create(entity, body);
+  }
 }
+```
 
-5. Why this works for your "Injection" goal:
+**Service flow** (inside `DynamicService`):
+1. Identify the tenant and entity from the request path
+2. Fetch the metadata for that entity from the schema store
+3. Run the incoming body through a dynamic validator (AJV or Zod, built from metadata)
+4. Call the injected adapter (`this.db.create(...)`, `this.db.findMany(...)`, etc.)
+5. Return normalized JSON
 
-    Schema Discovery: When a user "injects" their Postgres DB, you run a one-time script that populates your IDatabaseAdapter metadata.
+---
 
-    No Code Changes: If you want to support MySQL or SQLite tomorrow, you just write one new Adapter class. You don't have to touch your API logic at all.
+## The Database Provider Factory (The "Switch")
 
-    Consistency: The frontend always receives the same JSON structure, regardless of the source.
+This is where NestJS decides which engine to use — once per request, based on tenant config:
 
-The Big Challenge: Data Mapping
+```typescript
+// src/database/database.provider.ts
+export const DatabaseProvider = {
+  provide: 'DATABASE_ADAPTER',
+  scope: Scope.REQUEST,  // Critical: resolved fresh on every request
+  useFactory: async (configService: ConfigService, request: Request): Promise<IDatabaseAdapter> => {
+    const tenantConfig = await configService.getTenantConfig(
+      request.headers['x-tenant-id']
+    );
 
-The hardest part of the Adapter Pattern is Type Mapping.
+    if (tenantConfig.dbType === 'postgresql') {
+      const adapter = new PostgresAdapter();
+      await adapter.connect(tenantConfig.uri);
+      return adapter;
+    }
 
-    Postgres returns snake_case usually; Mongo returns camelCase.
+    const adapter = new MongoAdapter();
+    await adapter.connect(tenantConfig.uri);
+    return adapter;
+  },
+  inject: [ConfigService, REQUEST],
+};
+```
 
-    Postgres uses Integers for IDs; Mongo uses ObjectId.
+`Scope.REQUEST` is the key: NestJS rebuilds this provider for every incoming request, so every user always gets their own isolated adapter instance pointing at their own database.
 
-Your Adapter needs a "Transform Layer" to ensure that no matter what the database looks like, the JSON going back to the user is clean and consistent.
+---
 
-## References
+## Frontend Discovery: How the Client Knows What to Do
 
-https://learn.microsoft.com/en-us/dynamics365/fin-ops-core/dev-itpro/analytics/export-entities-to-your-own-database
-https://learn.microsoft.com/en-us/archive/blogs/dynamicsaxbi/power-bi-integration-with-entity-store-in-dynamics-ax-7-may-update
-https://www.reddit.com/r/softwarearchitecture/comments/1jgk64h/mastering_database_connection_pooling/
-https://www.ibm.com/docs/en/cognos-analytics/12.0.x?topic=administration-database-connection-pooling
-https://graphql.org/learn/introspection/
-https://stackoverflow.com/questions/25198271/what-is-the-difference-between-introspection-and-reflection
-https://dev.to/syridit118/understanding-the-adapter-design-pattern-4nle
-https://medium.com/@jescrich_57703/harnessing-the-adapter-pattern-in-microservice-architectures-for-vendor-agnosticism-debc21d2fe21
-https://www.reddit.com/r/Supabase/comments/1n19gi5/can_i_dynamically_switch_supabase_backend_in_a/
-https://www.fastly.com/blog/dynamic-backends-takes-the-pain-out-of-backend-configuration-management
+The frontend never hardcodes entity names, field types, or API routes. Instead:
+
+- **`/discovery` endpoint:** On load, the frontend calls this and receives the full schema map for that tenant — all entities, all fields, all types, all permissions.
+- **Universal Client SDK:** Instead of `axios.post('/books')`, the user's frontend uses `baas.collection('books').create({ title: 'My Book' })`. The SDK reads the discovery map and handles routing internally.
+
+This means: **when a user adds a new entity to their schema, the frontend automatically supports it — with zero frontend code changes.**
+
+---
+
+## Custom Business Logic: The Hook System
+
+When a user needs logic like "when a book is created, send a confirmation email," we cannot hardcode that. We use a sandboxed hook runner:
+
+- Users define hooks (small JS functions) per entity + event (`onCreate`, `onUpdate`, etc.)
+- We execute them inside `isolated-vm` — a secure V8 isolate — so user code cannot access our server environment
+- Hooks receive the entity data as input and can trigger outbound calls (webhooks, emails via Resend, etc.)
+
+---
+
+## Full Technology Stack
+
+| Layer | Technology | Why |
+|-------|-----------|-----|
+| Framework | NestJS + TypeScript | Modular DI system is essential for the Adapter pattern |
+| System DB | MongoDB | Stores schema metadata, tenant configs, hook definitions |
+| SQL Engine | Knex.js | Dynamic query builder — no static models required |
+| NoSQL Engine | MongoDB Native Driver | Direct, schema-free collection access |
+| Validation | AJV / Zod | Build validators at runtime from metadata |
+| Auth | Passport.js + JWT + CASL | Per-tenant ABAC permissions |
+| Background Jobs | BullMQ + Redis | Async tasks: email, webhooks, schema introspection jobs |
+| Real-time | Socket.io | Push data updates to clients (Firebase-style) |
+| Storage | MinIO / AWS S3 | S3-compatible, self-hostable file storage |
+| Cache | Redis | Metadata and query result caching |
+| Sandbox | isolated-vm | Safe execution of user-defined hook functions |
+| Containers | Docker + Kubernetes | Multi-tenant isolation at the infrastructure level |
+| Monitoring | Prometheus + Grafana + Sentry | Infra metrics and error tracking |
+| API Docs | Swagger (auto-generated by NestJS) | |
+
+---
+
+## What Makes This Different From a Normal Backend
+
+| Normal backend | This BaaS |
+|----------------|-----------|
+| Schema defined at build time | Schema discovered or defined at runtime |
+| One controller per resource | One controller for all resources |
+| Tied to one DB engine | Engine-agnostic via Adapter pattern |
+| Frontend knows the API shape | Frontend discovers the API shape at load time |
+| New entity = new code deploy | New entity = metadata entry, zero redeploy |
+
+The goal is simple: **a developer should be able to point our platform at their existing database and have a fully functional REST API — with validation, auth, real-time, and file storage — within minutes, without writing a single line of backend code.**
