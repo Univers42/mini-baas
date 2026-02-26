@@ -1,288 +1,159 @@
-# mini-baas — A Self-Adapting, Database-Agnostic Backend-as-a-Service
+# ft_transcendence
 
-> **Core principle:** We are not building an app. We are building an App Factory.
-> Our backend must transform itself at runtime to serve any business model it has never seen before — without a single line of hardcoded schema, controller, or model.
+*Created as part of the 42 school Common Core curriculum by dlesieur, danfern3, serjimen, alcacere and vjan-nie — Univers42, 2026.*
 
----
-
-## What This Actually Is
-
-Most backends are static: a developer writes a schema, a controller, a service, and deploys. That works for one product. It breaks completely for a platform.
-
-This BaaS is different. **The backend has zero knowledge of any user's data model at build time.** When a request arrives, the system:
-
-1. Reads the user's metadata (their schema definition or their existing database)
-2. Constructs the correct model, query, and validation on the fly
-3. Executes against the right database engine (SQL or NoSQL)
-4. Returns a consistent, typed JSON response to the frontend
-
-The backend *becomes* the right backend — for each user, on every request.
+ft_transcendence is the capstone project of the 42 Common Core. One full-stack web application built from scratch by a team of five: backend, frontend, real-time communication, authentication, database design, containerization, and CI — all in one. The theme is free; ours is **[TBD — fill when decided]**.
 
 ---
 
-## The Two Core Problems We Solve
+## Table of Contents
 
-### Problem 1 — We Don't Know the Schema Ahead of Time
+- [Quick Start](#quick-start)
+- [Theme](#theme)
+- [Architecture](#architecture)
+- [Bibliography](#bibliography)
+- [Use of AI](#use-of-ai)
+- [Why We Loved Working On It](#why-we-loved-working-on-it)
 
-Traditional ORMs require you to define your models before deployment. We cannot do that: every user has a different data model.
+---
 
-**Our solution: Metadata-Driven Architecture**
+## Quick Start
 
-Instead of hardcoded models, users define (or we discover) their data model as JSON metadata, stored in our system database. At request time, NestJS reads this metadata and generates a Mongoose model or a Knex query builder on the fly.
+The only dependency is Docker.
 
-```
-User says: "I want a Book entity with title (string) and price (number)"
-              ↓
-We store:  { entity: "book", tenantId: "user_23", fields: [...] }  →  system DB
-              ↓
-Request arrives at GET /api/v1/books
-              ↓
-Backend reads metadata → generates model → executes query → returns JSON
+```bash
+git clone git@github.com:Univers42/transcendence.git || git clone https://github.com/Univers42/transcendence.git
+cd transcendence
+cp .env.example .env
+make
 ```
 
-There is no `BookController`. There is no `BookSchema`. There is only one `DynamicController` and one `DynamicService` that handle every entity for every user.
+`make` builds the containers, installs dependencies, runs database migrations, and starts the dev servers. Git hooks activate automatically on the first run — nothing to install.
+
+| Service | URL |
+|---------|-----|
+| Frontend | http://localhost:5173 |
+| Backend API | http://localhost:3000 |
+| Swagger | http://localhost:3000/api/docs |
+| Prisma Studio | http://localhost:5555 |
+
+For everything else — branch workflow, commit conventions, testing, SCSS — read [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
-### Problem 2 — Users Have Different Database Engines
+## Theme
 
-Some users have Postgres. Some have MongoDB. Some use Supabase. We cannot force everyone onto the same engine — and we do not want to.
+**[Theme to be determined by the team.]**
 
-**Our solution: The Adapter Pattern**
+The technical stack is fixed by the subject: TypeScript end-to-end, real-time features, OAuth authentication, containerized deployment. The theme — what the application is actually *about* — is entirely our choice.
 
-We define a single, universal interface that every database engine must implement:
+---
 
-```typescript
-// src/common/interfaces/database-adapter.interface.ts
-export interface IDatabaseAdapter {
-  connect(connectionString: string): Promise<void>;
-  findOne(collection: string, filter: Record<string, any>): Promise<any>;
-  findMany(collection: string, filter: Record<string, any>): Promise<any[]>;
-  create(collection: string, data: Record<string, any>): Promise<any>;
-  update(collection: string, id: string, data: Record<string, any>): Promise<any>;
-  delete(collection: string, id: string): Promise<boolean>;
-  introspect(): Promise<SchemaMetadata>;
-}
+## Architecture
+
+```mermaid
+graph TB
+    Browser
+
+    subgraph Compose["Docker Compose"]
+        Nginx["nginx  ·  :80"]
+        Frontend["React + Vite  ·  :5173"]
+        Backend["NestJS  ·  :3000"]
+        WS["WebSocket Gateway"]
+        PG[("PostgreSQL  ·  :5432")]
+        Redis[("Redis  ·  :6379")]
+    end
+
+    OAuth["42 OAuth 2.0"]
+
+    Browser -->|"HTTP / WS"| Nginx
+    Nginx --> Frontend
+    Nginx --> Backend
+    Backend --> WS
+    Backend -->|"Prisma ORM"| PG
+    Backend --> Redis
+    Backend -->|"token exchange"| OAuth
+
+    style Compose fill:#f8fafc,stroke:#cbd5e1,color:#1e293b
+    style Frontend fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
+    style Backend fill:#ede9fe,stroke:#7c3aed,color:#3b1f6e
+    style WS fill:#ede9fe,stroke:#7c3aed,color:#3b1f6e
+    style PG fill:#dcfce7,stroke:#22c55e,color:#14532d
+    style Redis fill:#fecaca,stroke:#dc2626,color:#7f1d1d
+    style Nginx fill:#fef3c7,stroke:#d97706,color:#78350f
+    style OAuth fill:#fce7f3,stroke:#db2777,color:#831843
 ```
 
-NestJS injects the right adapter at request time based on the user's configuration. **The rest of the codebase never knows which engine it is talking to.** A `findOne` is always a `findOne`, whether it runs as `SELECT * FROM books WHERE id = 5` or `db.books.find({ _id: 5 })`.
+### Stack
+
+| Layer | Technology | Version |
+|-------|-----------|---------|
+| Backend | NestJS | 11 |
+| Frontend | React + Vite | 19 / 6 |
+| Language | TypeScript strict | 5.7 |
+| ORM | Prisma | 7 |
+| Database | PostgreSQL | 16 |
+| Cache / Pub-Sub | Redis | 7 |
+| Package manager | pnpm workspaces | 10 |
+| Reverse proxy | nginx | — |
+| Containerization | Docker Compose | — |
+| Styling | SCSS design system | — |
+
+**Why this stack.**
+NestJS gives us a real module system, dependency injection, and first-class WebSocket support without inventing it ourselves. React 19 with hooks-only keeps the frontend predictable at scale. Prisma handles migrations cleanly and generates typed queries from the schema. pnpm workspaces let us share TypeScript types between front and back without publishing to npm. Docker means every developer's environment is bit-for-bit identical — "works on my machine" stops being an excuse.
 
 ---
 
-## How the Backend Transforms Itself: The Full Flow
+## Bibliography
 
-```
-Incoming request:  GET /api/v1/user_23/books/42
-                              ↓
-           [ TenantInterceptor ] — reads x-tenant-id header
-                              ↓
-           Loads tenant config from system DB:
-           { dbType: "postgresql", uri: "postgres://...", schemaMap: {...} }
-                              ↓
-           [ DatabaseProvider Factory ] — injects PostgresAdapter or MongoAdapter
-                              ↓
-           [ DynamicController ] — receives entity = "books", id = "42"
-                              ↓
-           [ DynamicService ] — fetches metadata for "books" from schema map
-                              ↓
-           Calls: adapter.findOne("books", { id: "42" })
-                              ↓
-           PostgresAdapter translates: SELECT * FROM books WHERE id = 42
-           (or MongoAdapter translates: db.books.findOne({ _id: 42 }))
-                              ↓
-           Transform Layer normalizes the result to consistent JSON
-                              ↓
-                       Response to frontend
-```
+Guides, specs, and references that directly informed technical decisions made in this project.
 
-No matter which engine is underneath, the frontend always receives the same shape of response. The backend adapted itself.
+| Resource | What it informed |
+|----------|-----------------|
+| [The Twelve-Factor App](https://12factor.net/) | Config, build/run/release separation, stateless process design |
+| [NestJS documentation](https://docs.nestjs.com/) | Module architecture, DI, guards, interceptors, WebSocket gateways |
+| [Conventional Commits 1.0](https://www.conventionalcommits.org/) | Commit format enforced by our `commit-msg` hook |
+| [JWT Best Practices — RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) | Token handling, short expiry, refresh rotation |
+| [OAuth 2.0 — RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) | 42 OAuth integration and authorization code flow |
+| [WebSocket Protocol — RFC 6455](https://datatracker.ietf.org/doc/html/rfc6455) | Real-time layer for game and chat |
+| [OWASP Top 10](https://owasp.org/www-project-top-ten/) | Security baseline for every endpoint and auth decision |
+| [OWASP CSRF Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) | Token validation and SameSite cookie strategy |
+| [Prisma documentation](https://www.prisma.io/docs/) | Schema design, migrations, typed query generation |
+| [Bulletproof React](https://github.com/alan2207/bulletproof-react) | Feature-based folder structure, state and service patterns |
+| [ITCSS — Harry Roberts](https://www.xfive.co/blog/itcss-scalable-maintainable-css-architecture/) | SCSS layer architecture for our design system |
+| [Monorepo patterns](https://monorepo.tools/) | pnpm workspaces, shared package setup |
+| [Docker security best practices](https://docs.docker.com/develop/security-best-practices/) | Non-root containers, minimal base images, layer hygiene |
+| [Google Engineering Practices](https://google.github.io/eng-practices/review/) | Code review expectations and PR lifecycle |
+| [Pro Git — Scott Chacon](https://git-scm.com/book/en/v2) | Git internals, hooks, rebase strategy |
 
 ---
 
-## How We Discover the Schema (Without Being Told)
+## Use of AI
 
-We support four connection modes. In all cases, the result is the same: a **Metadata Map** that our dynamic system can read.
+We used AI tools during development. Here is what that means concretely:
 
-| Mode | How it works |
-|------|-------------|
-| **1. Direct DB connection** | User provides a connection string. We run `INFORMATION_SCHEMA` queries (Postgres) or collection inspection (Mongo). We read every table, column type, relation, and index. |
-| **2. Supabase / cloud hosted** | User provides project URL + service role key. We connect directly to the underlying Postgres and run the same introspection. |
-| **3. Manual schema upload** | User pastes or uploads a SQL dump, Prisma schema, JSON schema, or OpenAPI spec. We parse it and build the metadata map from that. |
-| **4. Existing REST/GraphQL API** | User points us at an OpenAPI spec or GraphQL endpoint. We parse the spec to construct the routing and type map. |
+- **Scaffolding** — initial module structure, test skeletons, DTO boilerplate
+- **Debugging** — explaining compiler errors, suggesting fixes for runtime issues
+- **Documentation** — drafting CONTRIBUTING.md, SECURITY.md, hook documentation, this README
 
-The introspection result is always the same internal structure — a `SchemaMetadata` object the rest of the system depends on.
+What AI did not do: make architectural decisions, write business logic unsupervised or produce code that wasn't read, tested, and understood before being committed. Every AI suggestion went through the same code review process as anything else.
 
 ---
 
-## Database Engine Support: SQL and NoSQL Together
+## Why We Loved Working On It
 
-We support both engines simultaneously. Users choose based on their needs:
+ft_transcendence is the first project at 42 where the constraint isn't the algorithm — it's the system. You can't solve it by writing clever code in one file. You have to make real decisions: which framework, which patterns, how to split the work, how to keep a codebase coherent across five people editing it in parallel.
 
-- **MongoDB (NoSQL):** Maximum flexibility. Schema is validated at runtime via AJV/Zod using the stored metadata. Ideal for users who need speed and evolving data models.
-- **Postgres (SQL):** Full relational integrity, foreign keys, complex joins. Ideal for users with existing structured data or strict compliance requirements.
+The git hooks were a good example. Spending time hardening them — making them activate automatically on `make`, fail loudly on bad commits, protect `main` with a password gate — pays off immediately in team discipline without requiring anyone to remember to do anything.
 
-```
-User's choice        Engine injected        Query style
-─────────────────    ───────────────────    ─────────────────────────────────
-MongoDB (hosted)  →  MongoAdapter        →  db.collection.find({ ... })
-Postgres (BYOD)   →  PostgresAdapter     →  knex(table).where({ ... })
-Supabase          →  PostgresAdapter     →  (same, via Postgres connection)
-```
+Real-time is genuinely interesting. WebSocket lifecycle, reconnection logic, state synchronization between server and clients under latency — these are problems you don't encounter in CRUD exercises. They require you to think about time, ordering, and failure modes in a way most 42 projects don't.
 
-Adding a new engine (MySQL, SQLite, CockroachDB) means writing one new Adapter class. No other code changes.
+The monorepo constraint forced us to build a shared type system. When the backend and frontend agree on types at compile time, you catch integration bugs before they become runtime surprises. That's an insight that doesn't come from reading about it.
+
+The teamwork part is underrated. Five people on one codebase forced us to write readable code, document decisions, and communicate constantly. It's closer to professional software development than anything else in the curriculum — and it's harder, and more interesting, for exactly that reason.
 
 ---
 
-## Architecture Overview
-
-```
-src/
-├── engines/
-│   ├── sql.engine.ts          — Knex-based adapter for Postgres/MySQL
-│   └── nosql.engine.ts        — MongoDB native driver adapter
-│
-├── database/
-│   └── database.provider.ts   — Factory: injects correct adapter per request
-│
-├── dynamic-api/
-│   ├── dynamic.controller.ts  — Single entry point: /:tenantId/:entityName
-│   ├── dynamic.service.ts     — Orchestrates metadata lookup + adapter calls
-│   └── dynamic.validator.ts   — Runtime validation via AJV/Zod from metadata
-│
-├── schema/
-│   ├── introspection.service.ts — Runs DB discovery for all four connection modes
-│   └── metadata.store.ts        — Reads/writes schema metadata to system DB
-│
-├── tenant/
-│   └── tenant.interceptor.ts  — Resolves tenant config from every request
-│
-└── hooks/
-    └── hook.runner.ts         — Executes user-defined cloud functions via isolated-vm
-```
-
----
-
-## The Generic Controller and Service
-
-We write exactly one controller and one service. They handle every entity for every user.
-
-**Controller** (`/:tenantId/:entityName`)
-```typescript
-@Controller(':entityName')
-export class DynamicController {
-  constructor(
-    @Inject('DATABASE_ADAPTER') private readonly db: IDatabaseAdapter
-  ) {}
-
-  @Get(':id')
-  getOne(@Param('entityName') entity: string, @Param('id') id: string) {
-    // Works identically for SQL and NoSQL
-    return this.db.findOne(entity, { id });
-  }
-
-  @Post()
-  async create(
-    @Param('entityName') entity: string,
-    @Body() body: Record<string, any>
-  ) {
-    // Validate against runtime schema before writing
-    await this.validator.validate(entity, body);
-    return this.db.create(entity, body);
-  }
-}
-```
-
-**Service flow** (inside `DynamicService`):
-1. Identify the tenant and entity from the request path
-2. Fetch the metadata for that entity from the schema store
-3. Run the incoming body through a dynamic validator (AJV or Zod, built from metadata)
-4. Call the injected adapter (`this.db.create(...)`, `this.db.findMany(...)`, etc.)
-5. Return normalized JSON
-
----
-
-## The Database Provider Factory (The "Switch")
-
-This is where NestJS decides which engine to use — once per request, based on tenant config:
-
-```typescript
-// src/database/database.provider.ts
-export const DatabaseProvider = {
-  provide: 'DATABASE_ADAPTER',
-  scope: Scope.REQUEST,  // Critical: resolved fresh on every request
-  useFactory: async (configService: ConfigService, request: Request): Promise<IDatabaseAdapter> => {
-    const tenantConfig = await configService.getTenantConfig(
-      request.headers['x-tenant-id']
-    );
-
-    if (tenantConfig.dbType === 'postgresql') {
-      const adapter = new PostgresAdapter();
-      await adapter.connect(tenantConfig.uri);
-      return adapter;
-    }
-
-    const adapter = new MongoAdapter();
-    await adapter.connect(tenantConfig.uri);
-    return adapter;
-  },
-  inject: [ConfigService, REQUEST],
-};
-```
-
-`Scope.REQUEST` is the key: NestJS rebuilds this provider for every incoming request, so every user always gets their own isolated adapter instance pointing at their own database.
-
----
-
-## Frontend Discovery: How the Client Knows What to Do
-
-The frontend never hardcodes entity names, field types, or API routes. Instead:
-
-- **`/discovery` endpoint:** On load, the frontend calls this and receives the full schema map for that tenant — all entities, all fields, all types, all permissions.
-- **Universal Client SDK:** Instead of `axios.post('/books')`, the user's frontend uses `baas.collection('books').create({ title: 'My Book' })`. The SDK reads the discovery map and handles routing internally.
-
-This means: **when a user adds a new entity to their schema, the frontend automatically supports it — with zero frontend code changes.**
-
----
-
-## Custom Business Logic: The Hook System
-
-When a user needs logic like "when a book is created, send a confirmation email," we cannot hardcode that. We use a sandboxed hook runner:
-
-- Users define hooks (small JS functions) per entity + event (`onCreate`, `onUpdate`, etc.)
-- We execute them inside `isolated-vm` — a secure V8 isolate — so user code cannot access our server environment
-- Hooks receive the entity data as input and can trigger outbound calls (webhooks, emails via Resend, etc.)
-
----
-
-## Full Technology Stack
-
-| Layer | Technology | Why |
-|-------|-----------|-----|
-| Framework | NestJS + TypeScript | Modular DI system is essential for the Adapter pattern |
-| System DB | MongoDB | Stores schema metadata, tenant configs, hook definitions |
-| SQL Engine | Knex.js | Dynamic query builder — no static models required |
-| NoSQL Engine | MongoDB Native Driver | Direct, schema-free collection access |
-| Validation | AJV / Zod | Build validators at runtime from metadata |
-| Auth | Passport.js + JWT + CASL | Per-tenant ABAC permissions |
-| Background Jobs | BullMQ + Redis | Async tasks: email, webhooks, schema introspection jobs |
-| Real-time | Socket.io | Push data updates to clients (Firebase-style) |
-| Storage | MinIO / AWS S3 | S3-compatible, self-hostable file storage |
-| Cache | Redis | Metadata and query result caching |
-| Sandbox | isolated-vm | Safe execution of user-defined hook functions |
-| Containers | Docker + Kubernetes | Multi-tenant isolation at the infrastructure level |
-| Monitoring | Prometheus + Grafana + Sentry | Infra metrics and error tracking |
-| API Docs | Swagger (auto-generated by NestJS) | |
-
----
-
-## What Makes This Different From a Normal Backend
-
-| Normal backend | This BaaS |
-|----------------|-----------|
-| Schema defined at build time | Schema discovered or defined at runtime |
-| One controller per resource | One controller for all resources |
-| Tied to one DB engine | Engine-agnostic via Adapter pattern |
-| Frontend knows the API shape | Frontend discovers the API shape at load time |
-| New entity = new code deploy | New entity = metadata entry, zero redeploy |
-
-The goal is simple: **a developer should be able to point our platform at their existing database and have a fully functional REST API — with validation, auth, real-time, and file storage — within minutes, without writing a single line of backend code.**
+*Detailed contribution guidelines, commit conventions, testing, and SCSS documentation: [CONTRIBUTING.md](CONTRIBUTING.md)*
+*Team, roles, and module ownership: [TEAM.md](TEAM.md)*
+*Security policy and vulnerability reporting: [SECURITY.md](SECURITY.md)*
