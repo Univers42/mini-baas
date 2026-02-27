@@ -1,159 +1,98 @@
-# ft_transcendence
+<p align="center">
+  <a href="http://nestjs.com/" target="blank"><img src="https://nestjs.com/img/logo-small.svg" width="120" alt="Nest Logo" /></a>
+</p>
 
-*Created as part of the 42 school Common Core curriculum by dlesieur, danfern3, serjimen, alcacere and vjan-nie — Univers42, 2026.*
+[circleci-image]: https://img.shields.io/circleci/build/github/nestjs/nest/master?token=abc123def456
+[circleci-url]: https://circleci.com/gh/nestjs/nest
 
-ft_transcendence is the capstone project of the 42 Common Core. One full-stack web application built from scratch by a team of five: backend, frontend, real-time communication, authentication, database design, containerization, and CI — all in one. The theme is free; ours is **[TBD — fill when decided]**.
+  <p align="center">A progressive <a href="http://nodejs.org" target="_blank">Node.js</a> framework for building efficient and scalable server-side applications.</p>
+    <p align="center">
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/v/@nestjs/core.svg" alt="NPM Version" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/l/@nestjs/core.svg" alt="Package License" /></a>
+<a href="https://www.npmjs.com/~nestjscore" target="_blank"><img src="https://img.shields.io/npm/dm/@nestjs/common.svg" alt="NPM Downloads" /></a>
+<a href="https://circleci.com/gh/nestjs/nest" target="_blank"><img src="https://img.shields.io/circleci/build/github/nestjs/nest/master" alt="CircleCI" /></a>
+<a href="https://discord.gg/G7Qnnhy" target="_blank"><img src="https://img.shields.io/badge/discord-online-brightgreen.svg" alt="Discord"/></a>
+<a href="https://opencollective.com/nest#backer" target="_blank"><img src="https://opencollective.com/nest/backers/badge.svg" alt="Backers on Open Collective" /></a>
+<a href="https://opencollective.com/nest#sponsor" target="_blank"><img src="https://opencollective.com/nest/sponsors/badge.svg" alt="Sponsors on Open Collective" /></a>
+  <a href="https://paypal.me/kamilmysliwiec" target="_blank"><img src="https://img.shields.io/badge/Donate-PayPal-ff3f59.svg" alt="Donate us"/></a>
+    <a href="https://opencollective.com/nest#sponsor"  target="_blank"><img src="https://img.shields.io/badge/Support%20us-Open%20Collective-41B883.svg" alt="Support us"></a>
+  <a href="https://twitter.com/nestframework" target="_blank"><img src="https://img.shields.io/twitter/follow/nestframework.svg?style=social&label=Follow" alt="Follow us on Twitter"></a>
+</p>
+  <!--[![Backers on Open Collective](https://opencollective.com/nest/backers/badge.svg)](https://opencollective.com/nest#backer)
+  [![Sponsors on Open Collective](https://opencollective.com/nest/sponsors/badge.svg)](https://opencollective.com/nest#sponsor)-->
 
----
+## Description
 
-## Table of Contents
+[Nest](https://github.com/nestjs/nest) framework TypeScript starter repository.
 
-- [Quick Start](#quick-start)
-- [Theme](#theme)
-- [Architecture](#architecture)
-- [Bibliography](#bibliography)
-- [Use of AI](#use-of-ai)
-- [Why We Loved Working On It](#why-we-loved-working-on-it)
-
----
-
-## Quick Start
-
-The only dependency is Docker.
+## Project setup
 
 ```bash
-git clone git@github.com:Univers42/transcendence.git || git clone https://github.com/Univers42/transcendence.git
-cd transcendence
-cp .env.example .env
-make
+$ npm install
 ```
 
-`make` builds the containers, installs dependencies, runs database migrations, and starts the dev servers. Git hooks activate automatically on the first run — nothing to install.
+## Compile and run the project
 
-| Service | URL |
-|---------|-----|
-| Frontend | http://localhost:5173 |
-| Backend API | http://localhost:3000 |
-| Swagger | http://localhost:3000/api/docs |
-| Prisma Studio | http://localhost:5555 |
+```bash
+# development
+$ npm run start
 
-For everything else — branch workflow, commit conventions, testing, SCSS — read [CONTRIBUTING.md](CONTRIBUTING.md).
+# watch mode
+$ npm run start:dev
 
----
-
-## Theme
-
-**[Theme to be determined by the team.]**
-
-The technical stack is fixed by the subject: TypeScript end-to-end, real-time features, OAuth authentication, containerized deployment. The theme — what the application is actually *about* — is entirely our choice.
-
----
-
-## Architecture
-
-```mermaid
-graph TB
-    Browser
-
-    subgraph Compose["Docker Compose"]
-        Nginx["nginx  ·  :80"]
-        Frontend["React + Vite  ·  :5173"]
-        Backend["NestJS  ·  :3000"]
-        WS["WebSocket Gateway"]
-        PG[("PostgreSQL  ·  :5432")]
-        Redis[("Redis  ·  :6379")]
-    end
-
-    OAuth["42 OAuth 2.0"]
-
-    Browser -->|"HTTP / WS"| Nginx
-    Nginx --> Frontend
-    Nginx --> Backend
-    Backend --> WS
-    Backend -->|"Prisma ORM"| PG
-    Backend --> Redis
-    Backend -->|"token exchange"| OAuth
-
-    style Compose fill:#f8fafc,stroke:#cbd5e1,color:#1e293b
-    style Frontend fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
-    style Backend fill:#ede9fe,stroke:#7c3aed,color:#3b1f6e
-    style WS fill:#ede9fe,stroke:#7c3aed,color:#3b1f6e
-    style PG fill:#dcfce7,stroke:#22c55e,color:#14532d
-    style Redis fill:#fecaca,stroke:#dc2626,color:#7f1d1d
-    style Nginx fill:#fef3c7,stroke:#d97706,color:#78350f
-    style OAuth fill:#fce7f3,stroke:#db2777,color:#831843
+# production mode
+$ npm run start:prod
 ```
 
-### Stack
+## Run tests
 
-| Layer | Technology | Version |
-|-------|-----------|---------|
-| Backend | NestJS | 11 |
-| Frontend | React + Vite | 19 / 6 |
-| Language | TypeScript strict | 5.7 |
-| ORM | Prisma | 7 |
-| Database | PostgreSQL | 16 |
-| Cache / Pub-Sub | Redis | 7 |
-| Package manager | pnpm workspaces | 10 |
-| Reverse proxy | nginx | — |
-| Containerization | Docker Compose | — |
-| Styling | SCSS design system | — |
+```bash
+# unit tests
+$ npm run test
 
-**Why this stack.**
-NestJS gives us a real module system, dependency injection, and first-class WebSocket support without inventing it ourselves. React 19 with hooks-only keeps the frontend predictable at scale. Prisma handles migrations cleanly and generates typed queries from the schema. pnpm workspaces let us share TypeScript types between front and back without publishing to npm. Docker means every developer's environment is bit-for-bit identical — "works on my machine" stops being an excuse.
+# e2e tests
+$ npm run test:e2e
 
----
+# test coverage
+$ npm run test:cov
+```
 
-## Bibliography
+## Deployment
 
-Guides, specs, and references that directly informed technical decisions made in this project.
+When you're ready to deploy your NestJS application to production, there are some key steps you can take to ensure it runs as efficiently as possible. Check out the [deployment documentation](https://docs.nestjs.com/deployment) for more information.
 
-| Resource | What it informed |
-|----------|-----------------|
-| [The Twelve-Factor App](https://12factor.net/) | Config, build/run/release separation, stateless process design |
-| [NestJS documentation](https://docs.nestjs.com/) | Module architecture, DI, guards, interceptors, WebSocket gateways |
-| [Conventional Commits 1.0](https://www.conventionalcommits.org/) | Commit format enforced by our `commit-msg` hook |
-| [JWT Best Practices — RFC 8725](https://datatracker.ietf.org/doc/html/rfc8725) | Token handling, short expiry, refresh rotation |
-| [OAuth 2.0 — RFC 6749](https://datatracker.ietf.org/doc/html/rfc6749) | 42 OAuth integration and authorization code flow |
-| [WebSocket Protocol — RFC 6455](https://datatracker.ietf.org/doc/html/rfc6455) | Real-time layer for game and chat |
-| [OWASP Top 10](https://owasp.org/www-project-top-ten/) | Security baseline for every endpoint and auth decision |
-| [OWASP CSRF Prevention](https://cheatsheetseries.owasp.org/cheatsheets/Cross-Site_Request_Forgery_Prevention_Cheat_Sheet.html) | Token validation and SameSite cookie strategy |
-| [Prisma documentation](https://www.prisma.io/docs/) | Schema design, migrations, typed query generation |
-| [Bulletproof React](https://github.com/alan2207/bulletproof-react) | Feature-based folder structure, state and service patterns |
-| [ITCSS — Harry Roberts](https://www.xfive.co/blog/itcss-scalable-maintainable-css-architecture/) | SCSS layer architecture for our design system |
-| [Monorepo patterns](https://monorepo.tools/) | pnpm workspaces, shared package setup |
-| [Docker security best practices](https://docs.docker.com/develop/security-best-practices/) | Non-root containers, minimal base images, layer hygiene |
-| [Google Engineering Practices](https://google.github.io/eng-practices/review/) | Code review expectations and PR lifecycle |
-| [Pro Git — Scott Chacon](https://git-scm.com/book/en/v2) | Git internals, hooks, rebase strategy |
+If you are looking for a cloud-based platform to deploy your NestJS application, check out [Mau](https://mau.nestjs.com), our official platform for deploying NestJS applications on AWS. Mau makes deployment straightforward and fast, requiring just a few simple steps:
 
----
+```bash
+$ npm install -g @nestjs/mau
+$ mau deploy
+```
 
-## Use of AI
+With Mau, you can deploy your application in just a few clicks, allowing you to focus on building features rather than managing infrastructure.
 
-We used AI tools during development. Here is what that means concretely:
+## Resources
 
-- **Scaffolding** — initial module structure, test skeletons, DTO boilerplate
-- **Debugging** — explaining compiler errors, suggesting fixes for runtime issues
-- **Documentation** — drafting CONTRIBUTING.md, SECURITY.md, hook documentation, this README
+Check out a few resources that may come in handy when working with NestJS:
 
-What AI did not do: make architectural decisions, write business logic unsupervised or produce code that wasn't read, tested, and understood before being committed. Every AI suggestion went through the same code review process as anything else.
+- Visit the [NestJS Documentation](https://docs.nestjs.com) to learn more about the framework.
+- For questions and support, please visit our [Discord channel](https://discord.gg/G7Qnnhy).
+- To dive deeper and get more hands-on experience, check out our official video [courses](https://courses.nestjs.com/).
+- Deploy your application to AWS with the help of [NestJS Mau](https://mau.nestjs.com) in just a few clicks.
+- Visualize your application graph and interact with the NestJS application in real-time using [NestJS Devtools](https://devtools.nestjs.com).
+- Need help with your project (part-time to full-time)? Check out our official [enterprise support](https://enterprise.nestjs.com).
+- To stay in the loop and get updates, follow us on [X](https://x.com/nestframework) and [LinkedIn](https://linkedin.com/company/nestjs).
+- Looking for a job, or have a job to offer? Check out our official [Jobs board](https://jobs.nestjs.com).
 
----
+## Support
 
-## Why We Loved Working On It
+Nest is an MIT-licensed open source project. It can grow thanks to the sponsors and support by the amazing backers. If you'd like to join them, please [read more here](https://docs.nestjs.com/support).
 
-ft_transcendence is the first project at 42 where the constraint isn't the algorithm — it's the system. You can't solve it by writing clever code in one file. You have to make real decisions: which framework, which patterns, how to split the work, how to keep a codebase coherent across five people editing it in parallel.
+## Stay in touch
 
-The git hooks were a good example. Spending time hardening them — making them activate automatically on `make`, fail loudly on bad commits, protect `main` with a password gate — pays off immediately in team discipline without requiring anyone to remember to do anything.
+- Author - [Kamil Myśliwiec](https://twitter.com/kammysliwiec)
+- Website - [https://nestjs.com](https://nestjs.com/)
+- Twitter - [@nestframework](https://twitter.com/nestframework)
 
-Real-time is genuinely interesting. WebSocket lifecycle, reconnection logic, state synchronization between server and clients under latency — these are problems you don't encounter in CRUD exercises. They require you to think about time, ordering, and failure modes in a way most 42 projects don't.
+## License
 
-The monorepo constraint forced us to build a shared type system. When the backend and frontend agree on types at compile time, you catch integration bugs before they become runtime surprises. That's an insight that doesn't come from reading about it.
-
-The teamwork part is underrated. Five people on one codebase forced us to write readable code, document decisions, and communicate constantly. It's closer to professional software development than anything else in the curriculum — and it's harder, and more interesting, for exactly that reason.
-
----
-
-*Detailed contribution guidelines, commit conventions, testing, and SCSS documentation: [CONTRIBUTING.md](CONTRIBUTING.md)*
-*Team, roles, and module ownership: [TEAM.md](TEAM.md)*
-*Security policy and vulnerability reporting: [SECURITY.md](SECURITY.md)*
+Nest is [MIT licensed](https://github.com/nestjs/nest/blob/master/LICENSE).
