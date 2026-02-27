@@ -12,6 +12,8 @@ COMPOSE_CMD := $(shell \
 )
 
 COMPOSE_FILE := $(COMPOSE_CMD) -f docker-compose.yml
+MONGO_PORT ?= 27018
+export MONGO_PORT
 
 BLUE    := \033[0;34m
 GREEN   := \033[0;32m
@@ -52,7 +54,7 @@ check-docker:
 	$(call step,$(GREEN)✓,Docker Engine is working)
 
 check-ports:
-	@PORTS="3000 5432 27017 6379"; \
+	@PORTS="3000 5432 $(MONGO_PORT) 6379"; \
 	BLOCKED=""; \
 	for p in $$PORTS; do \
 		if ss -tlnp 2>/dev/null | grep -q ":$$p "; then \
@@ -88,7 +90,8 @@ clean: turn-off
 dev: bootstrap
 	$(call step,$(BLUE)ℹ,Initializing Backend Server...)
 	@echo -e "  $(YELLOW)⚠$(NC) Press $(BOLD)Ctrl + C$(NC) ."
-	@echo -e "  Backend  → http://localhost:3000\n"
+	@echo -e "  Backend  → http://localhost:3000"
+	@echo -e "  MongoDB  → mongodb://localhost:$(MONGO_PORT)\n"
 	@bash -c " \
 		trap 'echo -e \"\n  $(YELLOW)⚠$(NC)  Getting signal. shooting down containers and freeing ports...\"; \
 		$(COMPOSE_FILE) down 2>/dev/null || true; \
