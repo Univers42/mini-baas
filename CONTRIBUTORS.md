@@ -26,7 +26,7 @@ ft_transcendence · 42 Common Core · 2026
 | [dlesieur](https://profile.intra.42.fr/users/dlesieur) | Dylan Lesieur | ALL | ALL | [@LESdylan](https://github.com/LESdylan) | Auth, OAuth 2.0 |
 | [danfern3](https://profile.intra.42.fr/users/danfern3) | Daniel Fernández | PO | PM | [@danielfdez17](https://github.com/danielfdez17) | Game engine, WebSockets |
 | [serjimen](https://profile.intra.42.fr/users/serjimen) | Sergio Jiménez | PM | TL | [@DJSurgeon](https://github.com/DJSurgeon) | Backend architecture, CI |
-| [alcacere](https://profile.intra.42.fr/users/alcacere) | Alex Cáceres | TL | PM | [@alcacere](https://github.com/alcacere) | Frontend, SCSS design system |
+| [alcacere](https://profile.intra.42.fr/users/alcacere) | Alex Cáceres | TL | PM | [@alcacere](https://github.com/alcacere) | UI integration, design system |
 | [vjan-nie](https://profile.intra.42.fr/users/vjan-nie) | Vadim Jan Nieto | TL | ALL | [@vjan-nie](https://github.com/vjan-nie) | Database, Prisma, Docker |
 
 :information_source: Notes about roles
@@ -53,13 +53,6 @@ graph TB
         rest["REST API layer"]
     end
 
-    subgraph Frontend["Frontend — React + Vite"]
-        pages["Pages / Routing"]
-        components["Components"]
-        stores["State — Zustand"]
-        scss["SCSS Design System"]
-    end
-
     subgraph Infra["Infrastructure"]
         docker["Docker / Compose"]
         ci["CI — GitHub Actions"]
@@ -73,14 +66,12 @@ graph TB
     login2 --> chat
     login3(["login3"]) --> docker
     login3 --> ci
-    login4(["login4"]) --> pages
-    login4 --> components
-    login4 --> scss
+    login4(["login4"]) --> rest
+    login4 --> users
     login5(["login5"]) --> db
     login5 --> hooks
 
     style Backend fill:#ede9fe,stroke:#7c3aed,color:#3b1f6e
-    style Frontend fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
     style Infra fill:#dcfce7,stroke:#22c55e,color:#14532d
 ```
 

@@ -14,7 +14,7 @@ This BaaS is different. **The backend has zero knowledge of any user's data mode
 1. Reads the user's metadata (their schema definition or their existing database)
 2. Constructs the correct model, query, and validation on the fly
 3. Executes against the right database engine (SQL or NoSQL)
-4. Returns a consistent, typed JSON response to the frontend
+4. Returns a consistent, typed JSON response to client applications
 
 The backend *becomes* the right backend — for each user, on every request.
 
@@ -92,10 +92,10 @@ Incoming request:  GET /api/v1/user_23/books/42
                               ↓
            Transform Layer normalizes the result to consistent JSON
                               ↓
-                       Response to frontend
+                      Response to client app
 ```
 
-No matter which engine is underneath, the frontend always receives the same shape of response. The backend adapted itself.
+No matter which engine is underneath, client applications always receive the same shape of response. The backend adapted itself.
 
 ---
 
@@ -233,14 +233,14 @@ export const DatabaseProvider = {
 
 ---
 
-## Frontend Discovery: How the Client Knows What to Do
+## Client Discovery: How Integrations Know What to Do
 
-The frontend never hardcodes entity names, field types, or API routes. Instead:
+Client integrations never hardcode entity names, field types, or API routes. Instead:
 
-- **`/discovery` endpoint:** On load, the frontend calls this and receives the full schema map for that tenant — all entities, all fields, all types, all permissions.
-- **Universal Client SDK:** Instead of `axios.post('/books')`, the user's frontend uses `baas.collection('books').create({ title: 'My Book' })`. The SDK reads the discovery map and handles routing internally.
+- **`/discovery` endpoint:** On load, the client calls this and receives the full schema map for that tenant — all entities, all fields, all types, all permissions.
+- **Universal Client SDK:** Instead of `axios.post('/books')`, an integration uses `baas.collection('books').create({ title: 'My Book' })`. The SDK reads the discovery map and handles routing internally.
 
-This means: **when a user adds a new entity to their schema, the frontend automatically supports it — with zero frontend code changes.**
+This means: **when a user adds a new entity to their schema, client integrations automatically support it — with zero client code changes.**
 
 ---
 
@@ -282,7 +282,7 @@ When a user needs logic like "when a book is created, send a confirmation email,
 | Schema defined at build time | Schema discovered or defined at runtime |
 | One controller per resource | One controller for all resources |
 | Tied to one DB engine | Engine-agnostic via Adapter pattern |
-| Frontend knows the API shape | Frontend discovers the API shape at load time |
+| Client code knows the API shape | Client code discovers the API shape at load time |
 | New entity = new code deploy | New entity = metadata entry, zero redeploy |
 
 The goal is simple: **a developer should be able to point our platform at their existing database and have a fully functional REST API — with validation, auth, real-time, and file storage — within minutes, without writing a single line of backend code.**
