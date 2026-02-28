@@ -367,21 +367,38 @@ build-backend:  ## 🏗️ Build backend
 #  🚀 DEVELOPMENT
 # ============================================
 
-.PHONY: dev dev-backend shell
+.PHONY: dev dev-backend shell ensure-backend-deps
 
-dev: configure-hooks docker-up  ## 🚀 Start all dev servers (hot reload)
+ensure-backend-deps:
+	$(call step,$(BLUE)ℹ,Ensuring backend dependencies are installed...)
+	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && if [ ! -d node_modules/@nestjs/common ]; then pnpm install; fi" 2>&1 || { \
+		echo ""; \
+		echo -e "$(RED)┌─────────────────────────────────────────────────────────┐$(NC)"; \
+		echo -e "$(RED)│  ✗  FAILED: $(BOLD)backend dependency check$(NC)"; \
+		echo -e "$(RED)├─────────────────────────────────────────────────────────┤$(NC)"; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Why:$(NC)  Could not access/install backend dependencies"; \
+		echo -e "$(RED)│$(NC)        in container '$(CONTAINER)' (apps/backend)."; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Fix:$(NC)  make docker-clean && make dev"; \
+		echo -e "$(RED)└─────────────────────────────────────────────────────────┘$(NC)"; \
+		echo ""; \
+		exit 1; \
+	}
+
+dev: configure-hooks docker-up ensure-backend-deps  ## 🚀 Start all dev servers (hot reload)
 	$(call step,$(BLUE)ℹ,Starting dev servers...)
-	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
+	@docker exec $(CONTAINER) sh -c "if [ -f /tmp/backend-dev.pid ]; then read -r PID </tmp/backend-dev.pid; if kill -0 \"$$PID\" 2>/dev/null; then exit 0; fi; fi; cd $(BACKEND) && nohup pnpm run start:dev >/tmp/backend-dev.log 2>&1 & echo $$! >/tmp/backend-dev.pid"
 	@sleep 2
-	@docker exec $(CONTAINER) sh -c "pgrep -f 'nest start --watch' >/dev/null" || { \
+	@docker exec $(CONTAINER) sh -c "if [ -f /tmp/backend-dev.pid ]; then read -r PID </tmp/backend-dev.pid; kill -0 \"$$PID\" 2>/dev/null; else false; fi" || { \
 		echo -e "$(RED)✗ Backend process failed to start. Run $(BOLD)make dev-backend$(NC)$(RED) to view startup errors.$(NC)"; \
+		echo -e "$(YELLOW)Last backend logs:$(NC)"; \
+		docker exec $(CONTAINER) sh -c "tail -n 80 /tmp/backend-dev.log" 2>/dev/null || true; \
 		exit 1; \
 	}
 	$(call step,$(GREEN)✓,Dev servers started)
 	@echo -e "  Backend  → http://localhost:$${BACKEND_PORT:-3000}"
 	@echo -e "  Mailpit  → http://localhost:$${MAILPIT_UI_PORT:-8025}"
 
-dev-backend:  ## 🚀 Start backend only
+dev-backend: docker-up ensure-backend-deps  ## 🚀 Start backend only
 	@docker exec -it $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
 
 shell:  ## 🐚 Interactive shell in dev container

@@ -83,9 +83,9 @@ async function bootstrap() {
 
 void bootstrap();
 
-@Injectable()
-export class AppService {
-  getHello(): string {
-    return 'Hello World!';
-  }
-}
+// @Injectable()
+// export class AppService {
+//   getHello(): string {
+//     return 'Hello World!';
+//   }
+// }
