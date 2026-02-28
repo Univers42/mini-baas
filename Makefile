@@ -410,12 +410,14 @@ shell:  ## 🐚 Interactive shell in dev container
 
 .PHONY: turn-on turn-off
 
-turn-on: docker-up  ## ⚡ Start dev servers + open browser
+turn-on: docker-up ensure-backend-deps  ## ⚡ Start dev servers + open browser
 	$(call step,$(BLUE)ℹ,Starting dev servers...)
-	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
+	@docker exec $(CONTAINER) sh -c "if [ -f /tmp/backend-dev.pid ]; then read -r PID </tmp/backend-dev.pid; if kill -0 \"$$PID\" 2>/dev/null; then exit 0; fi; fi; cd $(BACKEND) && nohup pnpm run start:dev >/tmp/backend-dev.log 2>&1 & echo $$! >/tmp/backend-dev.pid"
 	@sleep 2
-	@docker exec $(CONTAINER) sh -c "pgrep -f 'nest start --watch' >/dev/null" || { \
+	@docker exec $(CONTAINER) sh -c "if [ -f /tmp/backend-dev.pid ]; then read -r PID </tmp/backend-dev.pid; kill -0 \"$$PID\" 2>/dev/null; else false; fi" || { \
 		echo -e "$(RED)✗ Backend process failed to start$(NC)"; \
+		echo -e "$(YELLOW)Last backend logs:$(NC)"; \
+		docker exec $(CONTAINER) sh -c "tail -n 80 /tmp/backend-dev.log" 2>/dev/null || true; \
 		exit 1; \
 	}
 	$(call step,$(GREEN)✓,Dev servers started)
