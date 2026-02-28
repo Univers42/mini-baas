@@ -372,7 +372,12 @@ build-backend:  ## 🏗️ Build backend
 
 dev: configure-hooks docker-up  ## 🚀 Start all dev servers (hot reload)
 	$(call step,$(BLUE)ℹ,Starting dev servers...)
-	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev" 2>/dev/null || true
+	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
+	@sleep 2
+	@docker exec $(CONTAINER) sh -c "pgrep -f 'nest start --watch' >/dev/null" || { \
+		echo -e "$(RED)✗ Backend process failed to start. Run $(BOLD)make dev-backend$(NC)$(RED) to view startup errors.$(NC)"; \
+		exit 1; \
+	}
 	$(call step,$(GREEN)✓,Dev servers started)
 	@echo -e "  Backend  → http://localhost:$${BACKEND_PORT:-3000}"
 	@echo -e "  Mailpit  → http://localhost:$${MAILPIT_UI_PORT:-8025}"
@@ -391,8 +396,12 @@ shell:  ## 🐚 Interactive shell in dev container
 
 turn-on: docker-up  ## ⚡ Start dev servers + open browser
 	$(call step,$(BLUE)ℹ,Starting dev servers...)
-	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev" 2>/dev/null || true
+	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
 	@sleep 2
+	@docker exec $(CONTAINER) sh -c "pgrep -f 'nest start --watch' >/dev/null" || { \
+		echo -e "$(RED)✗ Backend process failed to start$(NC)"; \
+		exit 1; \
+	}
 	$(call step,$(GREEN)✓,Dev servers started)
 	@echo ""
 	@echo -e "  Backend  → http://localhost:$${BACKEND_PORT:-3000}"
