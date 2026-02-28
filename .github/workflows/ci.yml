@@ -39,19 +39,12 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: |
             apps/backend/pnpm-lock.yaml
-            apps/frontend/pnpm-lock.yaml
 
       - name: Install backend dependencies
         run: cd apps/backend && pnpm install --frozen-lockfile
 
-      - name: Install frontend dependencies
-        run: cd apps/frontend && pnpm install --frozen-lockfile
-
       - name: Lint backend
         run: cd apps/backend && pnpm exec eslint .
-
-      - name: Lint frontend
-        run: cd apps/frontend && pnpm exec eslint .
 
   # ── Type Check ──────────────────────────────────────
   typecheck:
@@ -74,22 +67,15 @@ jobs:
           cache: "pnpm"
           cache-dependency-path: |
             apps/backend/pnpm-lock.yaml
-            apps/frontend/pnpm-lock.yaml
 
       - name: Install backend dependencies
         run: cd apps/backend && pnpm install --frozen-lockfile
-
-      - name: Install frontend dependencies
-        run: cd apps/frontend && pnpm install --frozen-lockfile
 
       - name: Generate Prisma client
         run: cd apps/backend && pnpm exec prisma generate --schema=prisma/schema.prisma
 
       - name: Typecheck backend
         run: cd apps/backend && pnpm exec tsc --noEmit
-
-      - name: Typecheck frontend
-        run: cd apps/frontend && pnpm exec tsc --noEmit
 
   # ── Unit Tests ──────────────────────────────────────
   test:

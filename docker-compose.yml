@@ -5,12 +5,11 @@
 #
 # Services:
 #   - backend:  NestJS (multi-stage build)
-#   - frontend: React + Nginx (multi-stage build)
 #   - db:       PostgreSQL 16
 #   - redis:    Redis 7 (cache + pub/sub)
 #
 # Compatibility: docker-compose v1.25+ / docker compose v2+
-# Port scheme:   standard (3000, 5173, etc.)
+# Port scheme:   standard (3000, 5432, etc.)
 # ============================================
 
 version: '3.8'
@@ -84,20 +83,6 @@ services:
       - UPLOAD_MAX_SIZE_MB=${UPLOAD_MAX_SIZE_MB:-5}
     volumes:
       - uploads:/app/uploads
-    networks:
-      - transcendence
-
-  # ── Frontend (React + Nginx) ─────────────────────────
-  frontend:
-    build:
-      context: .
-      dockerfile: docker/Dockerfile.frontend
-    container_name: transcendence-frontend
-    restart: unless-stopped
-    depends_on:
-      - backend
-    ports:
-      - "${FRONTEND_PORT:-5173}:80"
     networks:
       - transcendence
 

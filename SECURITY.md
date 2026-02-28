@@ -63,7 +63,7 @@ sequenceDiagram
 
 - All inputs validated via `class-validator` DTOs — no raw user data reaches the service layer
 - Parameterized queries only — Prisma never interpolates user input into SQL
-- No `dangerouslySetInnerHTML` in React — default escaping plus strict Content-Security-Policy headers via Helmet.js
+- Strict Content-Security-Policy headers via Helmet.js
 - Secrets in environment variables — the `pre-commit` hook blocks `.env` files from being staged
 - HTTPS in production — TLS 1.3, HSTS enforced, HTTP redirected
 
@@ -73,7 +73,6 @@ sequenceDiagram
 graph LR
     Internet --> Nginx["nginx (TLS termination)"]
     Nginx --> Backend["NestJS API"]
-    Nginx --> Frontend["React SPA"]
 
     subgraph Container["Each container"]
         nonroot["Non-root user"]
@@ -85,7 +84,6 @@ graph LR
     style Internet fill:#fecaca,stroke:#dc2626,color:#7f1d1d
     style Nginx fill:#fef3c7,stroke:#d97706,color:#78350f
     style Backend fill:#ede9fe,stroke:#7c3aed,color:#3b1f6e
-    style Frontend fill:#dbeafe,stroke:#3b82f6,color:#1e3a5f
     style Container fill:#dcfce7,stroke:#22c55e,color:#14532d
 ```
 

@@ -26,7 +26,6 @@ else
 export DOCKER_BUILDKIT := 0
 export COMPOSE_DOCKER_CLI_BUILD := 0
 endif
-
 .PHONY: help
 .DEFAULT_GOAL := all
 
@@ -58,7 +57,6 @@ COMPOSE_DEV  := $(COMPOSE_CMD) -f docker-compose.dev.yml
 COMPOSE_PROD := $(COMPOSE_CMD) -f docker-compose.yml
 CONTAINER    := transcendence-dev
 BACKEND      := apps/backend
-# FRONTEND     := apps/frontend
 SHARED       := packages/shared
 
 # Colors
@@ -83,7 +81,7 @@ endef
 # ── Step decorator ───────────────────────────────────
 # Usage: $(call step,emoji,message)
 define step
-	@echo -e "  $(1)  $(2)"
+	echo -e "  $(1)  $(2)"
 endef
 
 # ============================================
@@ -225,7 +223,7 @@ configure-hooks:  ## 🪝 Activate git hooks (auto-runs on make / make dev)
 
 .PHONY: all bootstrap banner
 
-all: update banner preflight configure-hooks bootstrap dev  ## 🚀 Full setup (default — Docker only)
+all: update configure-hooks banner preflight bootstrap dev  ## 🚀 Full setup (default — Docker only)
 	
 
 update:
@@ -240,7 +238,6 @@ bootstrap: docker-up install compile db-migrate  ## Full bootstrap sequence
 	@echo -e "$(GREEN)║$(NC)  ✅  $(BOLD)Setup complete!$(NC)                                       $(GREEN)║$(NC)"
 	@echo -e "$(GREEN)╠══════════════════════════════════════════════════════════╣$(NC)"
 	@echo -e "$(GREEN)║$(NC)                                                          $(GREEN)║$(NC)"
-# 	@echo -e "$(GREEN)║$(NC)  Frontend  →  http://localhost:$${FRONTEND_PORT:-5173}                      $(GREEN)║$(NC)"
 	@echo -e "$(GREEN)║$(NC)  Backend   →  http://localhost:$${BACKEND_PORT:-3000}                      $(GREEN)║$(NC)"
 	@echo -e "$(GREEN)║$(NC)  API Docs  →  http://localhost:$${BACKEND_PORT:-3000}/api/docs             $(GREEN)║$(NC)"
 	@echo -e "$(GREEN)║$(NC)  Prisma    →  http://localhost:$${PRISMA_STUDIO_PORT:-5555}                      $(GREEN)║$(NC)"
@@ -301,6 +298,9 @@ docker-logs: check-compose  ## 🐳 Tail all container logs
 docker-ps: check-compose  ## 🐳 Show running containers
 	@$(COMPOSE_DEV) ps
 
+docker-images: check-compose  ## 🐳 Show built images
+	@$(COMPOSE_DEV) images
+
 docker-clean: check-compose  ## 🐳 Remove containers + volumes (full reset)
 	@echo -e "$(RED)⚠  This will delete all data (database, node_modules, cache)$(NC)"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
@@ -310,6 +310,10 @@ docker-clean: check-compose  ## 🐳 Remove containers + volumes (full reset)
 		docker volume rm $$(docker volume ls -q --filter "name=transcendance") 2>/dev/null || true; \
 	}
 	$(call step,$(GREEN)✓,Full cleanup done)
+
+docker-fclean: docker-clean  ## 🐳 Full clean + prune unused Docker resources
+	@docker system prune -af --volumes 2>/dev/null || true
+	$(call step,$(GREEN)✓,Docker system pruned)
 
 # ============================================
 #  📦 DEPENDENCIES
@@ -336,51 +340,15 @@ install-backend:
 		exit 1; \
 	}
 
-# install-frontend:
-# 	$(call step,$(BLUE)ℹ,Installing frontend dependencies...)
-# 	@docker exec $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm install" 2>&1 || { \
-# 		echo ""; \
-# 		echo -e "$(RED)┌─────────────────────────────────────────────────────────┐$(NC)"; \
-# 		echo -e "$(RED)│  ✗  FAILED: $(BOLD)pnpm install (frontend)$(NC)"; \
-# 		echo -e "$(RED)├─────────────────────────────────────────────────────────┤$(NC)"; \
-# 		echo -e "$(RED)│$(NC)  $(BOLD)Why:$(NC)  Container '$(CONTAINER)' may not be running,"; \
-# 		echo -e "$(RED)│$(NC)        or apps/frontend/package.json is missing/invalid."; \
-# 		echo -e "$(RED)│$(NC)  $(BOLD)Fix:$(NC)  make docker-up   (ensure containers are up)"; \
-# 		echo -e "$(RED)│$(NC)        make shell       (debug inside the container)"; \
-# 		echo -e "$(RED)└─────────────────────────────────────────────────────────┘$(NC)"; \
-# 		echo ""; \
-# 		exit 1; \
-# 	}
-
 install-shared:
 	$(call step,$(BLUE)ℹ,Installing shared package dependencies...)
 	@docker exec $(CONTAINER) sh -c "cd $(SHARED) && pnpm install 2>/dev/null || true"
 
 # ============================================
-#  🎨 CSS / SASS
-# ============================================
-
-# .PHONY: gen-css
-
-# ── make gen-css ──────────────────────────────────────
-# Usage:
-#   make gen-css           → compile SASS to CSS once
-#   make gen-css WATCH=1   → watch mode (auto-recompile)
-# gen-css:  ## 🎨 Compile SASS → CSS (WATCH=1 for watch mode)
-# 	@if [ -n "$${WATCH:-}" ]; then \
-# 		$(call step,$(BLUE)ℹ,Starting SASS watcher...);\
-# 		docker exec -it $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm exec sass --watch src/styles:src/styles"; \
-# 	else \
-# 		$(call step,$(BLUE)ℹ,Compiling SASS...); \
-# 		docker exec $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm exec sass src/styles:src/styles --style=compressed --source-map"; \
-# 		$(call step,$(GREEN)✓,SASS compiled); \
-# 	fi
-
-# ============================================
 #  🔧 COMPILE & BUILD
 # ============================================
 
-.PHONY: compile build build-backend #build-frontend
+.PHONY: compile build build-backend
 
 compile:  ## 🔧 Generate Prisma client + compile TypeScript
 	$(call step,$(BLUE)ℹ,Generating Prisma client...)
@@ -389,17 +357,12 @@ compile:  ## 🔧 Generate Prisma client + compile TypeScript
 	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && pnpm exec tsc --noEmit 2>/dev/null || true"
 	$(call step,$(GREEN)✓,Compilation done)
 
-build: build-backend # build-frontend  ## 🏗️ Production build (all)
+build: build-backend  ## 🏗️ Production build
 
 build-backend:  ## 🏗️ Build backend
 	$(call step,$(BLUE)ℹ,Building backend...)
 	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run build"
 	$(call step,$(GREEN)✓,Backend built)
-
-# build-frontend:  ## 🏗️ Build frontend
-# 	$(call step,$(BLUE)ℹ,Building frontend...)
-# 	@docker exec $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm run build"
-# 	$(call step,$(GREEN)✓,Frontend built)
 
 # ============================================
 #  🚀 DEVELOPMENT
@@ -409,18 +372,18 @@ build-backend:  ## 🏗️ Build backend
 
 dev: configure-hooks docker-up  ## 🚀 Start all dev servers (hot reload)
 	$(call step,$(BLUE)ℹ,Starting dev servers...)
-	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev" 2>/dev/null || true
-# 	@docker exec -d $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm run dev -- --host 0.0.0.0" 2>/dev/null || true
+	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
+	@sleep 2
+	@docker exec $(CONTAINER) sh -c "pgrep -f 'nest start --watch' >/dev/null" || { \
+		echo -e "$(RED)✗ Backend process failed to start. Run $(BOLD)make dev-backend$(NC)$(RED) to view startup errors.$(NC)"; \
+		exit 1; \
+	}
 	$(call step,$(GREEN)✓,Dev servers started)
-# 	@echo -e "  Frontend → http://localhost:$${FRONTEND_PORT:-5173}"
 	@echo -e "  Backend  → http://localhost:$${BACKEND_PORT:-3000}"
 	@echo -e "  Mailpit  → http://localhost:$${MAILPIT_UI_PORT:-8025}"
 
 dev-backend:  ## 🚀 Start backend only
 	@docker exec -it $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
-
-# dev-frontend:  ## 🚀 Start frontend only
-# 	@docker exec -it $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm run dev -- --host 0.0.0.0"
 
 shell:  ## 🐚 Interactive shell in dev container
 	@docker exec -it $(CONTAINER) bash
@@ -433,17 +396,19 @@ shell:  ## 🐚 Interactive shell in dev container
 
 turn-on: docker-up  ## ⚡ Start dev servers + open browser
 	$(call step,$(BLUE)ℹ,Starting dev servers...)
-	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev" 2>/dev/null || true
-# 	@docker exec -d $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm run dev -- --host 0.0.0.0" 2>/dev/null || true
+	@docker exec -d $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
 	@sleep 2
+	@docker exec $(CONTAINER) sh -c "pgrep -f 'nest start --watch' >/dev/null" || { \
+		echo -e "$(RED)✗ Backend process failed to start$(NC)"; \
+		exit 1; \
+	}
 	$(call step,$(GREEN)✓,Dev servers started)
 	@echo ""
-# 	@echo -e "  Frontend → http://localhost:$${FRONTEND_PORT:-5173}"
 	@echo -e "  Backend  → http://localhost:$${BACKEND_PORT:-3000}"
 	@echo -e "  API Docs → http://localhost:$${BACKEND_PORT:-3000}/api/docs"
 	@echo -e "  Mailpit  → http://localhost:$${MAILPIT_UI_PORT:-8025}"
 	@echo ""
-	@URL="http://localhost:$${FRONTEND_PORT:-5173}"; \
+	@URL="http://localhost:$${BACKEND_PORT:-3000}/api/docs"; \
 	if command -v xdg-open >/dev/null 2>&1; then \
 		xdg-open "$$URL" 2>/dev/null & disown; \
 	elif command -v open >/dev/null 2>&1; then \
@@ -454,7 +419,7 @@ turn-on: docker-up  ## ⚡ Start dev servers + open browser
 
 turn-off:  ## 🔌 Stop everything (servers + containers + ports)
 	$(call step,$(YELLOW)⚠,Shutting everything down...)
-	@docker exec $(CONTAINER) sh -c "pkill -f 'node.*nest' 2>/dev/null; pkill -f 'node.*vite' 2>/dev/null; true" 2>/dev/null || true
+	@docker exec $(CONTAINER) sh -c "pkill -f 'node.*nest' 2>/dev/null; true" 2>/dev/null || true
 	@$(COMPOSE_DEV) down 2>/dev/null || { \
 		docker rm -f $$(docker ps -aq --filter "name=transcendence") 2>/dev/null || true; \
 	}
@@ -509,13 +474,11 @@ db-push:  ## 🗄️ Push schema changes (dev only, no migration)
 lint:  ## ✅ Run ESLint on all workspaces
 	$(call step,$(BLUE)ℹ,Running linter...)
 	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && pnpm exec eslint . 2>/dev/null || true"
-# 	@docker exec $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm exec eslint . 2>/dev/null || true"
 	$(call step,$(GREEN)✓,Lint complete)
 
 format:  ## ✅ Run Prettier on all workspaces
 	$(call step,$(BLUE)ℹ,Formatting code...)
 	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && pnpm exec prettier --write 'src/**/*.ts' 2>/dev/null || true"
-# 	@docker exec $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm exec prettier --write 'src/**/*.{ts,tsx,css}' 2>/dev/null || true"
 	$(call step,$(GREEN)✓,Formatting complete)
 
 # ── make prettier ─────────────────────────────────────
@@ -528,20 +491,18 @@ prettier:  ## ✅ Prettier — check / fix code formatting
 	@TARGET="$${PATH:-apps/ packages/}"; \
 	if [ -n "$${FIX:-}" ]; then \
 		docker exec $(CONTAINER) sh -c "pnpm -C $(BACKEND) exec prettier --write $$TARGET 2>/dev/null || true"; \
-		#docker exec $(CONTAINER) sh -c "pnpm -C $(FRONTEND) exec prettier --write $$TARGET 2>/dev/null || true"; \
 		echo -e "  $(GREEN)✓$(NC)  Files formatted"; \
 	else \
 		docker exec $(CONTAINER) sh -c "pnpm -C $(BACKEND) exec prettier --check 'src/**/*.ts' 2>&1 || true"; \
-		#docker exec $(CONTAINER) sh -c "pnpm -C $(FRONTEND) exec prettier --check 'src/**/*.{ts,tsx,css}' 2>&1 || true"; \
 		echo -e "  $(CYAN)ℹ$(NC)  Run $(BOLD)make prettier FIX=1$(NC) to auto-format"; \
 	fi
 
 # ── make audit ────────────────────────────────────────
 # Usage:
 #   make audit                          → audit backend (10 errors at a time)
-#   make audit PATH=apps/frontend       → audit a specific workspace
+#   make audit PATH=apps/backend        → audit a specific workspace
 #   make audit VERBOSE=1                → show full verbose output
-#   make audit PATH=apps/frontend VERBOSE=1
+#   make audit PATH=apps/backend VERBOSE=1
 AUDIT_PATH ?= apps/backend
 audit:  ## ✅ Security & lint audit (strict mode)
 	@_PATH="$${PATH:-$(AUDIT_PATH)}"; \
@@ -559,9 +520,9 @@ audit:  ## ✅ Security & lint audit (strict mode)
 	echo ""; \
 	echo -e "  $(BOLD)── Prettier (check) ──$(NC)"; \
 	if [ "$$_VERBOSE" = "1" ]; then \
-		docker exec $(CONTAINER) sh -c "cd /app/$$_PATH && pnpm exec prettier --check 'src/**/*.{ts,tsx,css}' 2>&1" || true; \
+		docker exec $(CONTAINER) sh -c "cd /app/$$_PATH && pnpm exec prettier --check 'src/**/*.ts' 2>&1" || true; \
 	else \
-		docker exec $(CONTAINER) sh -c "cd /app/$$_PATH && pnpm exec prettier --check 'src/**/*.{ts,tsx,css}' 2>&1" \
+		docker exec $(CONTAINER) sh -c "cd /app/$$_PATH && pnpm exec prettier --check 'src/**/*.ts' 2>&1" \
 			| head -n 10 || true; \
 		echo -e "  $(DIM)… showing first 10 lines. Use $(BOLD)VERBOSE=1$(NC)$(DIM) for full output$(NC)"; \
 	fi; \
@@ -580,7 +541,6 @@ audit:  ## ✅ Security & lint audit (strict mode)
 typecheck:  ## ✅ TypeScript type checking (no emit)
 	$(call step,$(BLUE)ℹ,Type checking...)
 	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && pnpm exec tsc --noEmit"
-# 	@docker exec $(CONTAINER) sh -c "cd $(FRONTEND) && pnpm exec tsc --noEmit"
 	$(call step,$(GREEN)✓,No type errors)
 
 # ============================================
@@ -634,7 +594,6 @@ prod: check-compose  ## 🏭 Build & start production stack
 	$(call step,$(BLUE)ℹ,Building production images...)
 	@$(COMPOSE_PROD) up -d --build
 	$(call step,$(GREEN)✓,Production stack running)
-	@echo -e "  Frontend → http://localhost:8080"
 	@echo -e "  Backend  → http://localhost:3000"
 
 prod-down:  ## 🏭 Stop production stack
@@ -655,7 +614,6 @@ local: local-install  ## 💻 Setup using host Node.js (no Docker)
 local-install:
 	$(call step,$(BLUE)ℹ,Installing dependencies locally...)
 	@cd $(BACKEND) && pnpm install
-# 	@cd $(FRONTEND) && pnpm install
 	@cd $(SHARED) && pnpm install 2>/dev/null || true
 	@cd $(BACKEND) && pnpm exec prisma generate
 	$(call step,$(GREEN)✓,Dependencies installed)
@@ -663,9 +621,7 @@ local-install:
 local-dev:  ## 💻 Start dev servers locally (requires Node.js)
 	$(call step,$(BLUE)ℹ,Starting local dev servers...)
 	@cd $(BACKEND) && pnpm run start:dev &
-# 	@cd $(FRONTEND) && pnpm run dev &
 	$(call step,$(GREEN)✓,Dev servers starting...)
-# 	@echo -e "  Frontend → http://localhost:5173"
 	@echo -e "  Backend  → http://localhost:3000"
 
 # ============================================
@@ -677,7 +633,7 @@ local-dev:  ## 💻 Start dev servers locally (requires Node.js)
 kill-ports:  ## 🔌 Kill processes + containers on all project ports
 	@echo -e "$(YELLOW)⚠$(NC)  Freeing project ports..."
 	@# Stop any Docker containers using our ports (from other projects)
-	@for p in 3000 3001 5555 27018; do \
+	@for p in 3000 5555; do \
 		CONTAINER=$$(docker ps -q --filter "publish=$$p" 2>/dev/null | head -1); \
 		if [ -n "$$CONTAINER" ]; then \
 			NAME=$$(docker inspect --format '{{.Name}}' $$CONTAINER 2>/dev/null | sed 's/^\///'); \
@@ -739,23 +695,14 @@ help:  ## ❓ Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
-	@echo -e "$(BOLD)Quick Start$(NC)"
-	@echo -e "  1) $(GREEN)make doctor$(NC)          $(DIM)# validate local environment$(NC)"
-	@echo -e "  2) $(GREEN)make$(NC)                 $(DIM)# full bootstrap + dev$(NC)"
-	@echo -e "  3) $(GREEN)make turn-off$(NC)        $(DIM)# stop everything + free ports$(NC)"
+	@echo -e "  $(DIM)First time? Run: make doctor$(NC)"
 	@echo ""
-	@echo -e "$(BOLD)Most Used Flows$(NC)"
-	@echo -e "  $(GREEN)make dev$(NC)                $(DIM)# start dev services$(NC)"
-	@echo -e "  $(GREEN)make docker-logs$(NC)        $(DIM)# tail all container logs$(NC)"
-	@echo -e "  $(GREEN)make kill-ports$(NC)         $(DIM)# free busy project ports$(NC)"
-	@echo -e "  $(GREEN)make docker-clean$(NC)       $(DIM)# remove containers and volumes$(NC)"
-	@echo ""
-	@echo -e "$(BOLD)Useful Overrides$(NC)"
-	@echo -e "  $(CYAN)BACKEND_PORT$(NC), $(CYAN)DB_PORT$(NC), $(CYAN)REDIS_PORT$(NC), $(CYAN)MAILPIT_UI_PORT$(NC)"
-	@echo -e "  Example: $(GREEN)BACKEND_PORT=3100 DB_PORT=5433 make dev$(NC)"
-	@echo ""
-	@echo -e "$(BOLD)Troubleshooting$(NC)"
-	@echo -e "  $(GREEN)make info$(NC)               $(DIM)# show detected compose/docker environment$(NC)"
-	@echo -e "  $(GREEN)make doctor$(NC)             $(DIM)# full diagnostic script$(NC)"
-	@echo -e "  $(GREEN)make fclean$(NC)             $(DIM)# hard reset (destructive)$(NC)"
-	@echo ""
+
+# ============================================
+#  📄 Static docs PDF conversion
+# ============================================
+
+.PHONY: convert_subject_pdf
+convert_subject_pdf:  ## Convert static_docs/subject.md → static_docs/subject.pdf using md-to-pdf
+	@echo "Converting static_docs/subject.md → static_docs/subject.pdf"
+	@bash vendor/scripts/md-to-pdf/convert.sh static_docs/subject.md static_docs/subject.pdf

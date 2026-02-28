@@ -6,9 +6,9 @@
 #   db       → PostgreSQL 16  (ORM via Prisma, public API, persistence)
 #   redis    → Redis 7        (WebSocket pub/sub, sessions, rate limiting, cache)
 #   mailpit  → Mailpit        (notification system — catches all outgoing email)
-#   dev      → Node.js 22     (NestJS backend + React frontend + Prisma)
+#   dev      → Node.js 22     (NestJS backend + Prisma)
 #
-# Ports use standard defaults (3000, 5173, 5432, 6379, etc.).
+# Ports use standard defaults (3000, 5432, 6379, etc.).
 # Override in .env if needed.
 #
 # Compatibility: docker-compose v1.25+ / docker compose v2+
@@ -78,7 +78,7 @@ services:
       - transcendence
 
   # ── Development Container ────────────────────────────
-  # Runs both NestJS (backend) and Vite (frontend) dev servers.
+  # Runs NestJS (backend) development services.
   # Source code is bind-mounted for hot reload.
   # node_modules use named volumes for performance.
   dev:
@@ -96,7 +96,6 @@ services:
         condition: service_healthy
     ports:
       - "${BACKEND_PORT:-3000}:3000"       # NestJS API + WebSocket
-      - "${FRONTEND_PORT:-5173}:5173"      # Vite dev server + HMR
       - "${PRISMA_STUDIO_PORT:-5555}:5555" # Prisma Studio
     volumes:
       # ── Source Code (bind mounts — hot reload) ─────
@@ -109,7 +108,6 @@ services:
       # ── Node modules (named volumes = fast) ────────
       # Prevents host↔container sync overhead on Linux/Mac.
       - backend-modules:/app/apps/backend/node_modules
-      - frontend-modules:/app/apps/frontend/node_modules
       - shared-modules:/app/packages/shared/node_modules
       # ── Caches (persist across rebuilds) ───────────
       - pnpm-store:/root/.local/share/pnpm/store
@@ -142,8 +140,7 @@ services:
       - API_RATE_LIMIT_MAX=${API_RATE_LIMIT_MAX:-100}
       # ── Ports (internal) ───────────────────────────
       - BACKEND_PORT=3000
-      - FRONTEND_PORT=5173
-      - CORS_ORIGINS=http://localhost:${FRONTEND_PORT:-5173}
+      - CORS_ORIGINS=${CORS_ORIGINS:-http://localhost:5173}
     networks:
       - transcendence
 
@@ -154,7 +151,6 @@ volumes:
   pg-data:
   redis-data:
   backend-modules:
-  frontend-modules:
   shared-modules:
   pnpm-store:
   prisma-engines:
