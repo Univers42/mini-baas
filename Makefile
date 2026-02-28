@@ -300,6 +300,9 @@ docker-logs: check-compose  ## 🐳 Tail all container logs
 docker-ps: check-compose  ## 🐳 Show running containers
 	@$(COMPOSE_DEV) ps
 
+docker-images: check-compose  ## 🐳 Show built images
+	@$(COMPOSE_DEV) images
+
 docker-clean: check-compose  ## 🐳 Remove containers + volumes (full reset)
 	@echo -e "$(RED)⚠  This will delete all data (database, node_modules, cache)$(NC)"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
@@ -309,6 +312,10 @@ docker-clean: check-compose  ## 🐳 Remove containers + volumes (full reset)
 		docker volume rm $$(docker volume ls -q --filter "name=transcendance") 2>/dev/null || true; \
 	}
 	$(call step,$(GREEN)✓,Full cleanup done)
+
+docker-fclean: docker-clean  ## 🐳 Full clean + prune unused Docker resources
+	@docker system prune -af --volumes 2>/dev/null || true
+	$(call step,$(GREEN)✓,Docker system pruned)
 
 # ============================================
 #  📦 DEPENDENCIES
