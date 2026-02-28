@@ -315,9 +315,9 @@ docker-clean: check-compose  ## 🐳 Remove containers + volumes (full reset)
 #  📦 DEPENDENCIES
 # ============================================
 
-.PHONY: install install-backend install-frontend install-shared
+.PHONY: install install-backend install-shared
 
-install: install-shared install-backend install-frontend  ## 📦 Install all dependencies
+install: install-shared install-backend  ## 📦 Install all dependencies
 	$(call step,$(GREEN)✓,All dependencies installed)
 
 install-backend:
@@ -380,7 +380,7 @@ install-shared:
 #  🔧 COMPILE & BUILD
 # ============================================
 
-.PHONY: compile build build-backend build-frontend
+.PHONY: compile build build-backend #build-frontend
 
 compile:  ## 🔧 Generate Prisma client + compile TypeScript
 	$(call step,$(BLUE)ℹ,Generating Prisma client...)
@@ -405,7 +405,7 @@ build-backend:  ## 🏗️ Build backend
 #  🚀 DEVELOPMENT
 # ============================================
 
-.PHONY: dev dev-backend dev-frontend shell
+.PHONY: dev dev-backend shell
 
 dev: configure-hooks docker-up  ## 🚀 Start all dev servers (hot reload)
 	$(call step,$(BLUE)ℹ,Starting dev servers...)
@@ -677,7 +677,7 @@ local-dev:  ## 💻 Start dev servers locally (requires Node.js)
 kill-ports:  ## 🔌 Kill processes + containers on all project ports
 	@echo -e "$(YELLOW)⚠$(NC)  Freeing project ports..."
 	@# Stop any Docker containers using our ports (from other projects)
-	@for p in 3000 5555; do \
+	@for p in 3000 3001 5555 27018; do \
 		CONTAINER=$$(docker ps -q --filter "publish=$$p" 2>/dev/null | head -1); \
 		if [ -n "$$CONTAINER" ]; then \
 			NAME=$$(docker inspect --format '{{.Name}}' $$CONTAINER 2>/dev/null | sed 's/^\///'); \
@@ -739,5 +739,23 @@ help:  ## ❓ Show this help message
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
-	@echo -e "  $(DIM)First time? Run: make doctor$(NC)"
+	@echo -e "$(BOLD)Quick Start$(NC)"
+	@echo -e "  1) $(GREEN)make doctor$(NC)          $(DIM)# validate local environment$(NC)"
+	@echo -e "  2) $(GREEN)make$(NC)                 $(DIM)# full bootstrap + dev$(NC)"
+	@echo -e "  3) $(GREEN)make turn-off$(NC)        $(DIM)# stop everything + free ports$(NC)"
+	@echo ""
+	@echo -e "$(BOLD)Most Used Flows$(NC)"
+	@echo -e "  $(GREEN)make dev$(NC)                $(DIM)# start dev services$(NC)"
+	@echo -e "  $(GREEN)make docker-logs$(NC)        $(DIM)# tail all container logs$(NC)"
+	@echo -e "  $(GREEN)make kill-ports$(NC)         $(DIM)# free busy project ports$(NC)"
+	@echo -e "  $(GREEN)make docker-clean$(NC)       $(DIM)# remove containers and volumes$(NC)"
+	@echo ""
+	@echo -e "$(BOLD)Useful Overrides$(NC)"
+	@echo -e "  $(CYAN)BACKEND_PORT$(NC), $(CYAN)DB_PORT$(NC), $(CYAN)REDIS_PORT$(NC), $(CYAN)MAILPIT_UI_PORT$(NC)"
+	@echo -e "  Example: $(GREEN)BACKEND_PORT=3100 DB_PORT=5433 make dev$(NC)"
+	@echo ""
+	@echo -e "$(BOLD)Troubleshooting$(NC)"
+	@echo -e "  $(GREEN)make info$(NC)               $(DIM)# show detected compose/docker environment$(NC)"
+	@echo -e "  $(GREEN)make doctor$(NC)             $(DIM)# full diagnostic script$(NC)"
+	@echo -e "  $(GREEN)make fclean$(NC)             $(DIM)# hard reset (destructive)$(NC)"
 	@echo ""
