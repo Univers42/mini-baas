@@ -11,16 +11,16 @@
 // ============================================
 
 import { NestFactory } from '@nestjs/core';
-import { Injectable, Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
+import { Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
+import helmet from 'helmet';
+import compression from 'compression';
+import cookieParser from 'cookie-parser';
 
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
-  const helmet = require('helmet');
-  const compression = require('compression');
-  const cookieParser = require('cookie-parser');
 
   // ── Security ──────────────────────────────────────
   app.use(helmet());
@@ -86,10 +86,3 @@ async function bootstrap() {
 }
 
 void bootstrap();
-
-// @Injectable()
-// export class AppService {
-//   getHello(): string {
-//     return 'Hello World!';
-//   }
-// }
