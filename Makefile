@@ -81,7 +81,7 @@ endef
 # ── Step decorator ───────────────────────────────────
 # Usage: $(call step,emoji,message)
 define step
-	echo -e "  $(1)  $(2)"
+	@echo -e "  $(1)  $(2)"
 endef
 
 # ============================================
@@ -289,7 +289,6 @@ docker-down: check-compose  ## 🐳 Stop all containers
 		echo -e "$(YELLOW)⚠$(NC)  Compose down failed. Force-removing containers..."; \
 		docker rm -f $$(docker ps -aq --filter "name=transcendence") 2>/dev/null || true; \
 	}
-	$(call step,$(GREEN)✓,Containers stopped)
 	$(call step,$(GREEN)✓,Containers stopped)
 
 docker-logs: check-compose  ## 🐳 Tail all container logs
