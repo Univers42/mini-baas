@@ -11,7 +11,7 @@
 // ============================================
 
 import { NestFactory } from '@nestjs/core';
-import { Injectable, Logger, ValidationPipe } from '@nestjs/common';
+import { Injectable, Logger, RequestMethod, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import { AppModule } from './app.module';
@@ -34,7 +34,9 @@ async function bootstrap() {
   });
 
   // ── Global prefix ─────────────────────────────────
-  app.setGlobalPrefix('api');
+  app.setGlobalPrefix('api', {
+    exclude: [{ path: '', method: RequestMethod.GET }],
+  });
 
   // ── Validation ────────────────────────────────────
   app.useGlobalPipes(
@@ -74,6 +76,8 @@ async function bootstrap() {
   // ── Start ─────────────────────────────────────────
   const port = process.env.BACKEND_PORT ?? 3000;
   await app.listen(port);
+
+  // app.get("/").get(() => "Welcome to Transcendence API!");
 
   const logger = new Logger('Bootstrap');
   logger.log(`🚀 Backend running on http://localhost:${port}`);
