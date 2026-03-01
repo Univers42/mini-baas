@@ -371,7 +371,7 @@ build-backend:  ## 🏗️ Build backend
 
 ensure-backend-deps:
 	$(call step,$(BLUE)ℹ,Ensuring backend dependencies are installed...)
-	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && if [ ! -d node_modules/@nestjs/common ]; then pnpm install; fi" 2>&1 || { \
+	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && if [ ! -d node_modules/@nestjs/common ] || [ ! -x node_modules/.bin/jest ]; then pnpm install --prod=false; fi" 2>&1 || { \
 		echo ""; \
 		echo -e "$(RED)┌─────────────────────────────────────────────────────────┐$(NC)"; \
 		echo -e "$(RED)│  ✗  FAILED: $(BOLD)backend dependency check$(NC)"; \
@@ -569,12 +569,12 @@ typecheck:  ## ✅ TypeScript type checking (no emit)
 
 test: test-unit test-e2e  ## 🧪 Run all tests
 
-test-unit:  ## 🧪 Run unit tests
+test-unit: ensure-backend-deps  ## 🧪 Run unit tests
 	$(call step,$(BLUE)ℹ,Running unit tests...)
 	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && pnpm test"
 	$(call step,$(GREEN)✓,Unit tests passed)
 
-test-e2e:  ## 🧪 Run E2E tests
+test-e2e: ensure-backend-deps  ## 🧪 Run E2E tests
 	$(call step,$(BLUE)ℹ,Running E2E tests...)
 	@docker exec $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run test:e2e"
 	$(call step,$(GREEN)✓,E2E tests passed)
