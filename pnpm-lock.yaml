@@ -53,6 +53,9 @@ importers:
       helmet:
         specifier: ^8.1.0
         version: 8.1.0
+      nest:
+        specifier: ^0.1.6
+        version: 0.1.6
       prisma:
         specifier: ^7.4.1
         version: 7.4.1(@types/react@19.2.14)(react-dom@19.2.4(react@19.2.4))(react@19.2.4)
@@ -914,6 +917,9 @@ packages:
   negotiator@0.6.4:
     resolution: {integrity: sha512-myRT3DiWPHqho5PrJaIRyaMv2kgYf0mUVgBNOYMuCH5Ki1yEiQaf/ZJuQ62nvpc44wL5WDbTX7yGJi1Neevw8w==}
     engines: {node: '>= 0.6'}
+
+  nest@0.1.6:
+    resolution: {integrity: sha512-21378J/6pHB9EZMId5yz9DaxVj778pCHhzfXhRLLrLWZydpLgbsyxL5B5QyTSWJBk5L8XbiGgMvNZMb/qBySYg==}
 
   node-fetch-native@1.6.7:
     resolution: {integrity: sha512-g9yhqoedzIUm0nTnTqAQvueMPVOuIY16bqgAJJC8XOOubYFNwz6IER9qs0Gq2Xd0+CecCKFjtdDTMA4u4xG06Q==}
@@ -2054,6 +2060,8 @@ snapshots:
   negotiator@0.6.3: {}
 
   negotiator@0.6.4: {}
+
+  nest@0.1.6: {}
 
   node-fetch-native@1.6.7: {}
 

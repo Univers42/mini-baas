@@ -11,7 +11,7 @@ import "dotenv/config";
 import { defineConfig } from "prisma/config";
 
 // Fallback URL for CI/generate-only scenarios (not used for actual connections)
-const DATABASE_URL = process.env.DATABASE_URL || "postgresql://placeholder:placeholder@localhost:5432/placeholder";
+const DATABASE_URL = process.env.DATABASE_URL || "postgresql://transcendence:transcendence@localhost:5432/transcendence";
 
 export default defineConfig({
   // Schema location

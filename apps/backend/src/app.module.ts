@@ -20,6 +20,7 @@ import { HealthController } from './health.controller';
 // import { SearchModule } from './search/search.module';
 // import { PrismaModule } from './prisma/prisma.module';
 // import { RedisModule } from './redis/redis.module';
+import { UsersModule } from './users/users.module';
 
 @Module({
   imports: [
@@ -53,6 +54,8 @@ import { HealthController } from './health.controller';
 
     // ── Scheduled Tasks ─────────────────────────────
     ScheduleModule.forRoot(),
+
+    UsersModule,
 
     // ── Feature Modules ─────────────────────────────
     // Uncomment these as you build them:
