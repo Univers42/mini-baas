@@ -25,5 +25,6 @@ export default defineConfig({
   // Migrations directory
   migrations: {
     path: "prisma/migrations",
+    seed: "ts-node --transpile-only prisma/seed.ts",
   },
 });
