@@ -1,219 +1,380 @@
-// ============================================
-// Prisma Schema — Transcendence
-// ============================================
-// Models:
-//   • Users, profiles, friends      (user interaction)
-//   • Chat messages                 (chat system)
-//   • Notifications                 (notification system)
-//   • File uploads                  (file management)
-//   • API keys                      (public API)
-//
-// Run after editing:
-//   pnpm exec prisma migrate dev --name <description>
-//   pnpm exec prisma generate
-// ============================================
-
 generator client {
-  provider = "prisma-client-js"
-  output   = "../node_modules/.prisma/client"
+  provider        = "prisma-client-js"
+  engineType      = "library"
+  previewFeatures = ["partialIndexes"]
 }
 
 datasource db {
   provider = "postgresql"
 }
 
-// ── Users & Authentication ──────────────────────────
+// ── 1. Users & Security ──────────────────────────────────────────────
 
 model User {
-  id            String    @id @default(uuid())
-  email         String    @unique
-  username      String    @unique
-  displayName   String?
-  avatarUrl     String?
-  bio           String?
-  passwordHash  String?   // null for OAuth-only users
-  is2FAEnabled  Boolean   @default(false)
-  twoFASecret   String?
-  status        UserStatus @default(OFFLINE)
-  role          UserRole   @default(USER)
-  lastSeenAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  id                                                             String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  email                                                          String                  @unique @db.VarChar(255)
+  username                                                       String                  @unique @db.VarChar(100)
+  display_name                                                   String?                 @db.VarChar(255)
+  avatar_url                                                     String?
+  password_hash                                                  String?
+  is_active                                                      Boolean                 @default(true)
+  mfa_enabled                                                    Boolean                 @default(false)
+  mfa_secret                                                     String?
+  status                                                         String                  @default("offline") @db.VarChar(20)
+  last_login_at                                                  DateTime?               @db.Timestamptz(6)
+  last_seen_at                                                   DateTime?               @db.Timestamptz(6)
+  updated_by                                                     String?                 @db.Uuid
+  created_at                                                     DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at                                                     DateTime                @default(now()) @db.Timestamptz(6)
 
-  // ── Relations ─────────────────────────────────────
-  oauthAccounts OAuthAccount[]
-  sentMessages     ChatMessage[]   @relation("SentMessages")
-  sentFriendReqs   Friendship[]    @relation("FriendRequester")
-  recvFriendReqs   Friendship[]    @relation("FriendReceiver")
-  notifications    Notification[]
-  files            FileUpload[]
-  apiKeys          ApiKey[]
-  channelMembers   ChannelMember[]
+  // Cleaned Relations
+  api_keys                                                       ApiKey[]
+  contacts_contacts_contact_user_idTousers                       contacts[]              @relation("contacts_contact_user_idTousers")
+  contacts_contacts_updated_byTousers                            contacts[]              @relation("contacts_updated_byTousers")
+  contacts_contacts_user_idTousers                               contacts[]              @relation("contacts_user_idTousers")
+  database_connections_database_connections_created_byTousers    database_connections[]  @relation("database_connections_created_byTousers")
+  database_connections_database_connections_updated_byTousers    database_connections[]  @relation("database_connections_updated_byTousers")
+  notifications                                                  Notification[]
+  oauth_accounts                                                 OAuthAccount[]
+  organization_members_organization_members_invited_byTousers    organization_members[]  @relation("organization_members_invited_byTousers")
+  organization_members_organization_members_user_idTousers       organization_members[]  @relation("organization_members_user_idTousers")
+  organizations_organizations_created_byTousers                  organizations[]         @relation("organizations_created_byTousers")
+  organizations_organizations_updated_byTousers                  organizations[]         @relation("organizations_updated_byTousers")
+  project_members_project_members_invited_byTousers              project_members[]       @relation("project_members_invited_byTousers")
+  project_members_project_members_user_idTousers                 project_members[]       @relation("project_members_user_idTousers")
+  projects_projects_created_byTousers                            projects[]              @relation("projects_created_byTousers")
+  projects_projects_updated_byTousers                            projects[]              @relation("projects_updated_byTousers")
+  provisioned_databases                                          provisioned_databases[]
+  user_permissions_user_permissions_granted_byTousers            user_permissions[]      @relation("user_permissions_granted_byTousers")
+  user_permissions_user_permissions_user_idTousers               user_permissions[]      @relation("user_permissions_user_idTousers")
+  user_role_assignments_user_role_assignments_assigned_byTousers user_role_assignments[] @relation("user_role_assignments_assigned_byTousers")
+  user_role_assignments_user_role_assignments_user_idTousers     user_role_assignments[] @relation("user_role_assignments_user_idTousers")
+  user_sessions                                                  user_sessions[]
+  users                                                          User?                   @relation("usersTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+  other_users                                                    User[]                  @relation("usersTousers")
+  workspace_members_workspace_members_invited_byTousers          workspace_members[]     @relation("workspace_members_invited_byTousers")
+  workspace_members_workspace_members_user_idTousers             workspace_members[]     @relation("workspace_members_user_idTousers")
+  workspaces_workspaces_created_byTousers                        workspaces[]            @relation("workspaces_created_byTousers")
+  workspaces_workspaces_updated_byTousers                        workspaces[]            @relation("workspaces_updated_byTousers")
 
   @@map("users")
 }
 
-enum UserStatus {
-  ONLINE
-  OFFLINE
-  BUSY
-  AWAY
-}
-
-enum UserRole {
-  USER
-  ADMIN
-}
-
-// ── OAuth Accounts (42, Google, etc.) ───────────────
-
 model OAuthAccount {
-  id          String   @id @default(uuid())
-  provider    String   // "42", "google", etc.
-  providerId  String
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  id               String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String    @db.Uuid
+  provider         String    @db.VarChar(50)
+  provider_id      String    @db.VarChar(255)
+  access_token     String?
+  refresh_token    String?
+  token_expires_at DateTime? @db.Timestamptz(6)
+  created_at       DateTime  @default(now()) @db.Timestamptz(6)
+  users            User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@unique([provider, providerId])
+  @@unique([provider, provider_id])
   @@map("oauth_accounts")
 }
 
-// ── Friendships ─────────────────────────────────────
-
-model Friendship {
-  id          String           @id @default(uuid())
-  requesterId String
-  receiverId  String
-  status      FriendshipStatus @default(PENDING)
-  requester   User             @relation("FriendRequester", fields: [requesterId], references: [id], onDelete: Cascade)
-  receiver    User             @relation("FriendReceiver", fields: [receiverId], references: [id], onDelete: Cascade)
-  createdAt   DateTime         @default(now())
-  updatedAt   DateTime         @updatedAt
-
-  @@unique([requesterId, receiverId])
-  @@map("friendships")
-}
-
-enum FriendshipStatus {
-  PENDING
-  ACCEPTED
-  BLOCKED
-}
-
-// ── Chat ────────────────────────────────────────────
-
-model Channel {
-  id          String          @id @default(uuid())
-  name        String?
-  type        ChannelType     @default(DIRECT)
-  isPrivate   Boolean         @default(false)
-  password    String?         // hashed, for protected channels
-  createdAt   DateTime        @default(now())
-  updatedAt   DateTime        @updatedAt
-
-  messages    ChatMessage[]
-  members     ChannelMember[]
-
-  @@map("channels")
-}
-
-enum ChannelType {
-  DIRECT
-  GROUP
-  PUBLIC
-}
-
-model ChannelMember {
-  id        String            @id @default(uuid())
-  role      ChannelMemberRole @default(MEMBER)
-  isMuted   Boolean           @default(false)
-  mutedUntil DateTime?
-  isBanned  Boolean           @default(false)
-  userId    String
-  channelId String
-  user      User              @relation(fields: [userId], references: [id], onDelete: Cascade)
-  channel   Channel           @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  joinedAt  DateTime          @default(now())
-
-  @@unique([userId, channelId])
-  @@map("channel_members")
-}
-
-enum ChannelMemberRole {
-  OWNER
-  ADMIN
-  MEMBER
-}
-
-model ChatMessage {
-  id        String   @id @default(uuid())
-  content   String
-  senderId  String
-  channelId String
-  sender    User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
-  channel   Channel  @relation(fields: [channelId], references: [id], onDelete: Cascade)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([channelId, createdAt])
-  @@map("chat_messages")
-}
-
-// ── Notifications ───────────────────────────────────
-
 model Notification {
-  id        String             @id @default(uuid())
-  type      NotificationType
-  title     String
-  message   String
-  isRead    Boolean            @default(false)
-  metadata  Json?              // flexible payload
-  userId    String
-  user      User               @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt DateTime           @default(now())
+  id            String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id       String   @db.Uuid
+  type          String   @db.VarChar(50)
+  title         String   @db.VarChar(255)
+  message       String?
+  is_read       Boolean  @default(false)
+  resource_type String?  @db.VarChar(50)
+  resource_id   String?  @db.Uuid
+  action_url    String?
+  created_at    DateTime @default(now()) @db.Timestamptz(6)
+  users         User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
-  @@index([userId, isRead, createdAt])
   @@map("notifications")
 }
 
-enum NotificationType {
-  FRIEND_REQUEST
-  FRIEND_ACCEPTED
-  CHAT_MESSAGE
-  SYSTEM
-  FILE_SHARED
-}
-
-// ── File Uploads ────────────────────────────────────
-
-model FileUpload {
-  id          String   @id @default(uuid())
-  filename    String   // original filename
-  storedName  String   // UUID-based stored name
-  mimeType    String
-  size        Int      // bytes
-  path        String   // storage path
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
-
-  @@index([userId])
-  @@map("file_uploads")
-}
-
-// ── Public API Keys ─────────────────────────────────
-
 model ApiKey {
-  id          String   @id @default(uuid())
-  name        String
-  keyHash     String   @unique // hashed API key
-  lastUsedAt  DateTime?
-  expiresAt   DateTime?
-  isActive    Boolean  @default(true)
-  userId      String
-  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  createdAt   DateTime @default(now())
+  id           String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id      String    @db.Uuid
+  name         String    @db.VarChar(255)
+  key_hash     String    @unique @db.VarChar(512)
+  scopes       String[]  @default([]) @db.VarChar(100)
+  is_active    Boolean   @default(true)
+  last_used_at DateTime? @db.Timestamptz(6)
+  expires_at   DateTime? @db.Timestamptz(6)
+  created_at   DateTime  @default(now()) @db.Timestamptz(6)
+  users        User      @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 
   @@map("api_keys")
+}
+
+model user_sessions {
+  id               String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id          String   @db.Uuid
+  token_hash       String   @db.VarChar(512)
+  ip_address       String?  @db.Inet
+  user_agent       String?
+  is_active        Boolean  @default(true)
+  expires_at       DateTime @db.Timestamptz(6)
+  created_at       DateTime @default(now()) @db.Timestamptz(6)
+  last_activity_at DateTime @default(now()) @db.Timestamptz(6)
+  users            User     @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+model contacts {
+  id                                    String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                               String   @db.Uuid
+  contact_user_id                       String?  @db.Uuid
+  first_name                            String?  @db.VarChar(100)
+  last_name                             String?  @db.VarChar(100)
+  email                                 String?  @db.VarChar(255)
+  phone                                 String?  @db.VarChar(50)
+  metadata                              Json     @default("{}")
+  updated_by                            String?  @db.Uuid
+  created_at                            DateTime @default(now()) @db.Timestamptz(6)
+  updated_at                            DateTime @default(now()) @db.Timestamptz(6)
+  users_contacts_contact_user_idTousers User?    @relation("contacts_contact_user_idTousers", fields: [contact_user_id], references: [id], onUpdate: NoAction)
+  users_contacts_updated_byTousers      User?    @relation("contacts_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+  users_contacts_user_idTousers         User     @relation("contacts_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+// ── 2. Multi-Tenant Hierarchy (Org -> Project -> Workspace) ───────────
+
+model organizations {
+  id                                    String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name                                  String                 @db.VarChar(255)
+  slug                                  String                 @unique @db.VarChar(100)
+  logo_url                              String?
+  is_active                             Boolean                @default(true)
+  metadata                              Json                   @default("{}")
+  created_by                            String                 @db.Uuid
+  updated_by                            String?                @db.Uuid
+  created_at                            DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                            DateTime               @default(now()) @db.Timestamptz(6)
+  
+  database_connections                  database_connections[]
+  organization_members                  organization_members[]
+  users_organizations_created_byTousers User                   @relation("organizations_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  users_organizations_updated_byTousers User?                  @relation("organizations_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+  projects                              projects[]
+  provisioned_databases                 provisioned_databases[]
+  roles                                 roles[]
+}
+
+model organization_members {
+  id                                           String        @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organization_id                              String        @db.Uuid
+  user_id                                      String        @db.Uuid
+  invited_by                                   String?       @db.Uuid
+  joined_at                                    DateTime      @default(now()) @db.Timestamptz(6)
+  users_organization_members_invited_byTousers User?         @relation("organization_members_invited_byTousers", fields: [invited_by], references: [id], onUpdate: NoAction)
+  organizations                                organizations @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_organization_members_user_idTousers    User          @relation("organization_members_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([organization_id, user_id])
+}
+
+model projects {
+  id                               String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organization_id                  String                 @db.Uuid
+  name                             String                 @db.VarChar(255)
+  slug                             String                 @db.VarChar(100)
+  description                      String?
+  icon                             String?                @db.VarChar(50)
+  color                            String?                @db.VarChar(7)
+  is_archived                      Boolean                @default(false)
+  created_by                       String                 @db.Uuid
+  updated_by                       String?                @db.Uuid
+  created_at                       DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                       DateTime               @default(now()) @db.Timestamptz(6)
+  
+  database_connections             database_connections[]
+  project_members                  project_members[]
+  users_projects_created_byTousers User                   @relation("projects_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organizations                    organizations          @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_projects_updated_byTousers User?                  @relation("projects_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+  workspaces                       workspaces[]
+
+  @@unique([organization_id, slug])
+}
+
+model project_members {
+  id                                      String   @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id                              String   @db.Uuid
+  user_id                                 String   @db.Uuid
+  invited_by                              String?  @db.Uuid
+  joined_at                               DateTime @default(now()) @db.Timestamptz(6)
+  users_project_members_invited_byTousers User?    @relation("project_members_invited_byTousers", fields: [invited_by], references: [id], onUpdate: NoAction)
+  projects                                projects @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_project_members_user_idTousers    User     @relation("project_members_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([project_id, user_id])
+}
+
+model workspaces {
+  id                                 String              @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  project_id                         String              @db.Uuid
+  name                               String              @db.VarChar(255)
+  slug                               String              @db.VarChar(100)
+  description                        String?
+  type                               String              @default("default") @db.VarChar(50)
+  is_default                         Boolean             @default(false)
+  sort_order                         Int                 @default(0)
+  created_by                         String              @db.Uuid
+  updated_by                         String?             @db.Uuid
+  created_at                         DateTime            @default(now()) @db.Timestamptz(6)
+  updated_at                         DateTime            @default(now()) @db.Timestamptz(6)
+  
+  workspace_members                  workspace_members[]
+  users_workspaces_created_byTousers User                @relation("workspaces_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  projects                           projects            @relation(fields: [project_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_workspaces_updated_byTousers User?               @relation("workspaces_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@unique([project_id, slug])
+}
+
+model workspace_members {
+  id                                        String     @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  workspace_id                              String     @db.Uuid
+  user_id                                   String     @db.Uuid
+  invited_by                                String?    @db.Uuid
+  joined_at                                 DateTime   @default(now()) @db.Timestamptz(6)
+  users_workspace_members_invited_byTousers User?      @relation("workspace_members_invited_byTousers", fields: [invited_by], references: [id], onUpdate: NoAction)
+  users_workspace_members_user_idTousers    User       @relation("workspace_members_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  workspaces                                workspaces @relation(fields: [workspace_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([workspace_id, user_id])
+}
+
+// ── 3. Infrastructure & Databases ─────────────────────────────────────
+
+model database_connections {
+  id                                           String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organization_id                              String                 @db.Uuid
+  project_id                                   String?                @db.Uuid
+  name                                         String                 @db.VarChar(255)
+  slug                                         String                 @db.VarChar(100)
+  description                                  String?
+  connection_type                              String                 @db.VarChar(20)
+  engine                                       String                 @db.VarChar(30)
+  connection_config                            Json                   @default("{}")
+  network_config                               Json                   @default("{}")
+  credential_ref                               String?                @db.Uuid
+  provisioned_db_id                            String?                @db.Uuid
+  schema_cache                                 Json                   @default("{}")
+  schema_cached_at                             DateTime?              @db.Timestamptz(6)
+  health_status                                String                 @default("unknown") @db.VarChar(20)
+  last_health_check                            DateTime?              @db.Timestamptz(6)
+  pool_min                                     Int                    @default(2)
+  pool_max                                     Int                    @default(10)
+  connection_timeout                           Int                    @default(30000)
+  is_readonly                                  Boolean                @default(false)
+  is_active                                    Boolean                @default(true)
+  created_by                                   String                 @db.Uuid
+  updated_by                                   String?                @db.Uuid
+  created_at                                   DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at                                   DateTime               @default(now()) @db.Timestamptz(6)
+  
+  users_database_connections_created_byTousers User                   @relation("database_connections_created_byTousers", fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organizations                                organizations          @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  projects                                     projects?              @relation(fields: [project_id], references: [id], onUpdate: NoAction)
+  provisioned_databases                        provisioned_databases? @relation(fields: [provisioned_db_id], references: [id], onUpdate: NoAction)
+  users_database_connections_updated_byTousers User?                  @relation("database_connections_updated_byTousers", fields: [updated_by], references: [id], onUpdate: NoAction)
+
+  @@unique([organization_id, slug])
+}
+
+model provisioned_databases {
+  id                   String                 @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organization_id      String                 @db.Uuid
+  name                 String                 @db.VarChar(255)
+  provider             String                 @db.VarChar(30)
+  engine               String                 @db.VarChar(30)
+  tier                 String                 @default("free") @db.VarChar(20)
+  region               String                 @default("us-east-1") @db.VarChar(50)
+  provider_config      Json                   @default("{}")
+  provider_metadata    Json                   @default("{}")
+  resource_limits      Json                   @default("{}")
+  backup_config        Json                   @default("{}")
+  status               String                 @default("provisioning") @db.VarChar(20)
+  provisioned_at       DateTime?              @db.Timestamptz(6)
+  terminated_at        DateTime?              @db.Timestamptz(6)
+  created_by           String                 @db.Uuid
+  created_at           DateTime               @default(now()) @db.Timestamptz(6)
+  updated_at           DateTime               @default(now()) @db.Timestamptz(6)
+  
+  database_connections database_connections[]
+  users                User                   @relation(fields: [created_by], references: [id], onDelete: NoAction, onUpdate: NoAction)
+  organizations        organizations          @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+}
+
+// ── 4. RBAC (Roles & Permissions) ─────────────────────────────────────
+
+model roles {
+  id                    String                  @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  organization_id       String?                 @db.Uuid
+  name                  String                  @db.VarChar(100)
+  description           String?
+  scope                 String                  @default("organization") @db.VarChar(20)
+  is_system             Boolean                 @default(false)
+  created_at            DateTime                @default(now()) @db.Timestamptz(6)
+  updated_at            DateTime                @default(now()) @db.Timestamptz(6)
+  
+  role_permissions      role_permissions[]
+  organizations         organizations?          @relation(fields: [organization_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_roles_organization")
+  user_role_assignments user_role_assignments[]
+
+  @@unique([organization_id, name, scope])
+}
+
+model permissions {
+  id               String             @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  name             String             @unique @db.VarChar(255)
+  description      String?
+  resource_type    String             @db.VarChar(100)
+  action           String             @db.VarChar(50)
+  created_at       DateTime           @default(now()) @db.Timestamptz(6)
+  
+  role_permissions role_permissions[]
+  user_permissions user_permissions[]
+
+  @@unique([resource_type, action])
+}
+
+model role_permissions {
+  role_id       String      @db.Uuid
+  permission_id String      @db.Uuid
+  permissions   permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  roles         roles       @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@id([role_id, permission_id])
+}
+
+model user_permissions {
+  id                                       String      @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                                  String      @db.Uuid
+  permission_id                            String      @db.Uuid
+  granted                                  Boolean     @default(true)
+  granted_by                               String?     @db.Uuid
+  granted_at                               DateTime    @default(now()) @db.Timestamptz(6)
+  expires_at                               DateTime?   @db.Timestamptz(6)
+  
+  users_user_permissions_granted_byTousers User?       @relation("user_permissions_granted_byTousers", fields: [granted_by], references: [id], onUpdate: NoAction)
+  permissions                              permissions @relation(fields: [permission_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_user_permissions_user_idTousers    User        @relation("user_permissions_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+
+  @@unique([user_id, permission_id])
+}
+
+model user_role_assignments {
+  id                                             String    @id @default(dbgenerated("gen_random_uuid()")) @db.Uuid
+  user_id                                        String    @db.Uuid
+  role_id                                        String    @db.Uuid
+  context_type                                   String    @default("global") @db.VarChar(20)
+  context_id                                     String?   @db.Uuid
+  assigned_by                                    String?   @db.Uuid
+  assigned_at                                    DateTime  @default(now()) @db.Timestamptz(6)
+  expires_at                                     DateTime? @db.Timestamptz(6)
+  
+  users_user_role_assignments_assigned_byTousers User?     @relation("user_role_assignments_assigned_byTousers", fields: [assigned_by], references: [id], onUpdate: NoAction)
+  roles                                          roles     @relation(fields: [role_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
+  users_user_role_assignments_user_idTousers     User      @relation("user_role_assignments_user_idTousers", fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction)
 }

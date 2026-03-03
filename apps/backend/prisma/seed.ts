@@ -3,14 +3,7 @@ import "dotenv/config";
 import * as bcrypt from "bcrypt";
 import { PrismaPg } from "@prisma/adapter-pg";
 import { Pool } from "pg";
-import {
-  ChannelType,
-  FriendshipStatus,
-  NotificationType,
-  PrismaClient,
-  UserRole,
-  UserStatus,
-} from "../node_modules/.prisma/client";
+import { PrismaClient } from "@prisma/client";
 
 const databaseUrl = process.env.DATABASE_URL;
 
@@ -23,67 +16,48 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 async function clearDatabase() {
-  await prisma.chatMessage.deleteMany();
-  await prisma.channelMember.deleteMany();
-  await prisma.channel.deleteMany();
-  await prisma.friendship.deleteMany();
-  await prisma.notification.deleteMany();
-  await prisma.fileUpload.deleteMany();
+  console.log("🧹 Clearing existing data...");
+  // IMPORTANT: clear "childs" to avoid foreign key errors
+  await prisma.workspace_members.deleteMany();
+  await prisma.workspaces.deleteMany();
+  await prisma.project_members.deleteMany();
+  await prisma.projects.deleteMany();
+  await prisma.organization_members.deleteMany();
+  await prisma.organizations.deleteMany();
+  await prisma.user_sessions.deleteMany();
   await prisma.apiKey.deleteMany();
+  await prisma.notification.deleteMany();
   await prisma.oAuthAccount.deleteMany();
-  await prisma.user.deleteMany();
+  await prisma.user.deleteMany(); // Last thing to delete: users
 }
 
 async function seedUsers() {
-  const passwordHash = await bcrypt.hash("Passw0rd!", 10);
+  console.log("👥 Seeding users...");
+  const password_hash = await bcrypt.hash("Passw0rd!", 10);
 
   const users = [
     {
       email: "admin@transcendence.dev",
       username: "admin",
-      displayName: "Admin",
-      bio: "Platform administrator",
-      role: UserRole.ADMIN,
-      status: UserStatus.ONLINE,
-      passwordHash,
-      is2FAEnabled: true,
-      twoFASecret: "TEST_2FA_SECRET",
+      display_name: "Admin",
+      status: "online",
+      password_hash,
+      mfa_enabled: true,
+      mfa_secret: "TEST_2FA_SECRET",
     },
     {
       email: "alice@transcendence.dev",
       username: "alice",
-      displayName: "Alice",
-      bio: "Frontend engineer",
-      role: UserRole.USER,
-      status: UserStatus.ONLINE,
-      passwordHash,
+      display_name: "Alice",
+      status: "online",
+      password_hash,
     },
     {
       email: "bob@transcendence.dev",
       username: "bob",
-      displayName: "Bob",
-      bio: "Backend engineer",
-      role: UserRole.USER,
-      status: UserStatus.BUSY,
-      passwordHash,
-    },
-    {
-      email: "charlie@transcendence.dev",
-      username: "charlie",
-      displayName: "Charlie",
-      bio: "QA specialist",
-      role: UserRole.USER,
-      status: UserStatus.AWAY,
-      passwordHash,
-    },
-    {
-      email: "diana@transcendence.dev",
-      username: "diana",
-      displayName: "Diana",
-      bio: "Product manager",
-      role: UserRole.USER,
-      status: UserStatus.OFFLINE,
-      passwordHash,
+      display_name: "Bob",
+      status: "busy",
+      password_hash,
     },
   ];
 
@@ -91,216 +65,76 @@ async function seedUsers() {
   return prisma.user.findMany();
 }
 
-async function seedOAuthAccounts(userByUsername: Record<string, string>) {
-  await prisma.oAuthAccount.createMany({
-    data: [
-      {
-        provider: "42",
-        providerId: "alice-42-id",
-        userId: userByUsername.alice,
-      },
-      {
-        provider: "google",
-        providerId: "bob-google-id",
-        userId: userByUsername.bob,
-      },
-    ],
-  });
-}
+async function seedBaaSHierarchy(userByUsername: Record<string, string>) {
+  console.log("🏢 Seeding Organizations, Projects, and Workspaces...");
+  const adminId = userByUsername.admin;
+  const aliceId = userByUsername.alice;
 
-async function seedFriendships(userByUsername: Record<string, string>) {
-  await prisma.friendship.createMany({
-    data: [
-      {
-        requesterId: userByUsername.alice,
-        receiverId: userByUsername.bob,
-        status: FriendshipStatus.ACCEPTED,
-      },
-      {
-        requesterId: userByUsername.alice,
-        receiverId: userByUsername.charlie,
-        status: FriendshipStatus.PENDING,
-      },
-      {
-        requesterId: userByUsername.bob,
-        receiverId: userByUsername.diana,
-        status: FriendshipStatus.BLOCKED,
-      },
-    ],
-  });
-}
-
-async function seedChannelsAndMessages(userByUsername: Record<string, string>) {
-  const directAliceBob = await prisma.channel.create({
+  // 1. Create organization
+  const org = await prisma.organizations.create({
     data: {
-      type: ChannelType.DIRECT,
-      isPrivate: true,
-      members: {
-        create: [
-          { userId: userByUsername.alice, role: "OWNER" },
-          { userId: userByUsername.bob, role: "MEMBER" },
-        ],
-      },
+      name: "Transcendence Global",
+      slug: "transcendence-global",
+      created_by: adminId,
     },
   });
 
-  const engineering = await prisma.channel.create({
+  // 2. Create project within org
+  const project = await prisma.projects.create({
     data: {
-      name: "engineering",
-      type: ChannelType.PUBLIC,
-      members: {
-        create: [
-          { userId: userByUsername.admin, role: "OWNER" },
-          { userId: userByUsername.alice, role: "ADMIN" },
-          { userId: userByUsername.bob, role: "MEMBER" },
-          { userId: userByUsername.charlie, role: "MEMBER" },
-        ],
-      },
+      organization_id: org.id,
+      name: "BaaS Alpha Version",
+      slug: "baas-alpha",
+      description: "Main backend as a service project",
+      created_by: adminId,
     },
   });
 
-  const product = await prisma.channel.create({
+  // 3. Create workspace within project
+  await prisma.workspaces.create({
     data: {
-      name: "product",
-      type: ChannelType.GROUP,
-      isPrivate: true,
-      members: {
-        create: [
-          { userId: userByUsername.diana, role: "OWNER" },
-          { userId: userByUsername.admin, role: "ADMIN" },
-          { userId: userByUsername.alice, role: "MEMBER" },
-        ],
-      },
+      project_id: project.id,
+      name: "Engineering Team",
+      slug: "engineering-team",
+      type: "development",
+      created_by: adminId,
     },
   });
 
-  await prisma.chatMessage.createMany({
-    data: [
-      {
-        channelId: directAliceBob.id,
-        senderId: userByUsername.alice,
-        content: "Hey Bob, can you review the PR?",
-      },
-      {
-        channelId: directAliceBob.id,
-        senderId: userByUsername.bob,
-        content: "Sure, I'll check it now.",
-      },
-      {
-        channelId: engineering.id,
-        senderId: userByUsername.admin,
-        content: "Standup starts in 10 minutes.",
-      },
-      {
-        channelId: engineering.id,
-        senderId: userByUsername.charlie,
-        content: "QA report is ready for sprint review.",
-      },
-      {
-        channelId: product.id,
-        senderId: userByUsername.diana,
-        content: "Let's finalize release notes today.",
-      },
-    ],
+  // 4. Add org member
+  await prisma.organization_members.create({
+    data: {
+      organization_id: org.id,
+      user_id: aliceId,
+      invited_by: adminId,
+    },
   });
 }
 
-async function seedNotifications(userByUsername: Record<string, string>) {
-  await prisma.notification.createMany({
-    data: [
-      {
-        userId: userByUsername.bob,
-        type: NotificationType.FRIEND_REQUEST,
-        title: "New friend request",
-        message: "Alice sent you a friend request.",
-      },
-      {
-        userId: userByUsername.alice,
-        type: NotificationType.FRIEND_ACCEPTED,
-        title: "Friend request accepted",
-        message: "Bob accepted your friend request.",
-        isRead: true,
-      },
-      {
-        userId: userByUsername.charlie,
-        type: NotificationType.SYSTEM,
-        title: "Maintenance window",
-        message: "Scheduled maintenance tonight at 23:00 UTC.",
-      },
-    ],
-  });
-}
-
-async function seedFiles(userByUsername: Record<string, string>) {
-  await prisma.fileUpload.createMany({
-    data: [
-      {
-        filename: "avatar-alice.png",
-        storedName: `${randomUUID()}.png`,
-        mimeType: "image/png",
-        size: 128_000,
-        path: "/uploads/avatars/alice.png",
-        userId: userByUsername.alice,
-      },
-      {
-        filename: "qa-report.pdf",
-        storedName: `${randomUUID()}.pdf`,
-        mimeType: "application/pdf",
-        size: 512_600,
-        path: "/uploads/docs/qa-report.pdf",
-        userId: userByUsername.charlie,
-      },
-    ],
-  });
-}
-
-async function seedApiKeys(userByUsername: Record<string, string>) {
-  const adminKeyHash = await bcrypt.hash("test-admin-api-key", 10);
-  const userKeyHash = await bcrypt.hash("test-alice-api-key", 10);
-
-  await prisma.apiKey.createMany({
-    data: [
-      {
-        name: "Admin integration key",
-        keyHash: adminKeyHash,
-        userId: userByUsername.admin,
-      },
-      {
-        name: "Alice local dev key",
-        keyHash: userKeyHash,
-        userId: userByUsername.alice,
-      },
-    ],
+async function seedSystemAlerts(userByUsername: Record<string, string>) {
+  console.log("🔔 Seeding notifications...");
+  await prisma.notification.create({
+    data: {
+      user_id: userByUsername.admin,
+      type: "system",
+      title: "Welcome to Core BaaS",
+      message: "The infrastructure has been successfully provisioned.",
+      is_read: false,
+    },
   });
 }
 
 async function main() {
-  console.log("🧹 Clearing existing data...");
   await clearDatabase();
 
-  console.log("👥 Seeding users...");
   const users = await seedUsers();
+  // Mapping to get IDs easily: { "admin": "uuid-...", "alice": "uuid-..." }
   const userByUsername = Object.fromEntries(users.map((user) => [user.username, user.id]));
 
-  console.log("🔐 Seeding OAuth accounts...");
-  await seedOAuthAccounts(userByUsername);
+  await seedBaaSHierarchy(userByUsername);
+  await seedSystemAlerts(userByUsername);
 
-  console.log("🤝 Seeding friendships...");
-  await seedFriendships(userByUsername);
-
-  console.log("💬 Seeding channels and chat messages...");
-  await seedChannelsAndMessages(userByUsername);
-
-  console.log("🔔 Seeding notifications...");
-  await seedNotifications(userByUsername);
-
-  console.log("📁 Seeding uploaded files...");
-  await seedFiles(userByUsername);
-
-  console.log("🗝️  Seeding API keys...");
-  await seedApiKeys(userByUsername);
-
-  console.log("✅ Database seeded successfully.");
+  console.log("✅ Database seeded successfully with Core BaaS Architecture.");
 }
 
 main()

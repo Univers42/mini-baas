@@ -1,7 +1,7 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
-import { CreateUserDto } from './dto/create-user.dto';
-import { UpdateUserDto } from './dto/update-user.dto';
-import { PrismaService } from '../prisma.service';
+import { Injectable, NotFoundException } from "@nestjs/common";
+import { CreateUserDto } from "./dto/create-user.dto";
+import { UpdateUserDto } from "./dto/update-user.dto";
+import { PrismaService } from "../prisma.service";
 
 @Injectable()
 export class UsersService {
@@ -12,14 +12,14 @@ export class UsersService {
       data: {
         email: createUserDto.email,
         username: createUserDto.username,
-        displayName: createUserDto.displayName,
+        display_name: createUserDto.displayName, 
       },
     });
   }
 
   findAll() {
     return this.prisma.user.findMany({
-      orderBy: { createdAt: 'desc' },
+      orderBy: { created_at: "desc" }, 
     });
   }
 
@@ -45,7 +45,7 @@ export class UsersService {
       data: {
         email: updateUserDto.email,
         username: updateUserDto.username,
-        displayName: updateUserDto.displayName,
+        display_name: updateUserDto.displayName, 
       },
     });
   }

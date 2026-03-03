@@ -4,12 +4,12 @@
 // Wires together ALL feature modules.
 // ============================================
 
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { ThrottlerModule } from '@nestjs/throttler';
-import { EventEmitterModule } from '@nestjs/event-emitter';
-import { ScheduleModule } from '@nestjs/schedule';
-import { HealthController } from './health.controller';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { ThrottlerModule } from "@nestjs/throttler";
+import { EventEmitterModule } from "@nestjs/event-emitter";
+import { ScheduleModule } from "@nestjs/schedule";
+import { HealthController } from "./health.controller";
 
 // Feature modules (uncomment as you implement them)
 // import { AuthModule } from './auth/auth.module';
@@ -20,30 +20,30 @@ import { HealthController } from './health.controller';
 // import { SearchModule } from './search/search.module';
 // import { PrismaModule } from './prisma/prisma.module';
 // import { RedisModule } from './redis/redis.module';
-import { UsersModule } from './users/users.module';
+import { UsersModule } from "./users/users.module";
 
 @Module({
   imports: [
     // ── Configuration ───────────────────────────────
     ConfigModule.forRoot({
       isGlobal: true,
-      envFilePath: '.env',
+      envFilePath: ".env",
     }),
 
     // ── Rate Limiting (API key + public) ────────────
     ThrottlerModule.forRoot([
       {
-        name: 'short',
-        ttl: 1000,  // 1 second
-        limit: 3,   // 3 requests per second
+        name: "short",
+        ttl: 1000, // 1 second
+        limit: 3, // 3 requests per second
       },
       {
-        name: 'medium',
+        name: "medium",
         ttl: 10000, // 10 seconds
         limit: 20,
       },
       {
-        name: 'long',
+        name: "long",
         ttl: 60000, // 1 minute
         limit: 100,
       },
