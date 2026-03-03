@@ -15,8 +15,8 @@ import { Logger, ValidationPipe } from '@nestjs/common';
 import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
 import { IoAdapter } from '@nestjs/platform-socket.io';
 import helmet from 'helmet';
-import compression from 'compression';
-import cookieParser from 'cookie-parser';
+import * as compression from 'compression';
+import * as cookieParser from 'cookie-parser';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
