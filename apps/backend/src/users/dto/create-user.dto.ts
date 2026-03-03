@@ -1,11 +1,14 @@
+import { IsEmail, IsOptional, IsString, MinLength } from 'class-validator';
+
 export class CreateUserDto {
-    protected email: string = "changeme@gmail.com";
+  @IsEmail()
+  email!: string;
 
-    public getEmail(): string {
-        return this.email;
-    }
+  @IsString()
+  @MinLength(3)
+  username!: string;
 
-    public setEmail(email: string): void {
-        this.email = email;
-    }
+  @IsOptional()
+  @IsString()
+  displayName?: string;
 }
