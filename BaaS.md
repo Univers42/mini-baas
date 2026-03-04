@@ -72,6 +72,10 @@ In multi-tenant, the separation of roles and permissions must respect the *tenan
 * **CORS and WAF per tenant**
 * **Tenant-scoped metrics** for observability. ([UMA Technology][6])
 
+#### Definitions
+- CORS, or Cross-Origin Resource Sharing, is a security feature that allows web applications to request resources from different origins (domains) while ensuring safe data transfers.
+- WAF, or Web Application Firewall, is a security system that monitors and filters HTTP traffic to and from a web application to protect it from various attacks.
+
 ---
 
 ## **Multi-Tenant Observability**
