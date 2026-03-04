@@ -13,6 +13,7 @@ Most backends are static: a developer writes a schema and deploys. This breaks c
 #### 📄 Example: The "Master Document" (The Tenant's DNA)
 This JSON document represents everything the Data Plane needs to know to serve a specific tenant. It replaces static code completely.
 
+```json
     {
       "_id": "64a7b...89c",
       "tenantId": "ws_123",
@@ -39,10 +40,13 @@ This JSON document represents everything the Data Plane needs to know to serve a
       },
       "version": 1
     }
+```
+
 
 #### 💻 Example: Control Plane Implementation (Mongoose)
 To store this flexible, schema-less structure in our System DB, we use MongoDB and Mongoose. Here is how the schema is defined in the Control Plane:
 
+```typescript
     import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
     import { Document, Schema as MongooseSchema } from 'mongoose';
 
@@ -71,7 +75,7 @@ To store this flexible, schema-less structure in our System DB, we use MongoDB a
     }
 
     export const TenantMetadataSchema = SchemaFactory.createForClass(TenantMetadata);
-
+```
 *(Reference: [https://mongoosejs.com/docs/schematypes.html#mixed](https://mongoosejs.com/docs/schematypes.html#mixed) )*
 
 ### Multi-Tenant Isolation Strategy
@@ -151,6 +155,7 @@ sequenceDiagram
 
 To maintain sanity and scalability, the codebase enforces strict boundaries. Engines know nothing about HTTP, and Controllers know nothing about SQL.
 
+```plaintext
     src/
     ├── main.ts                     # Application entry point
     ├── app.module.ts               # Root module assembling the App Factory
@@ -184,7 +189,7 @@ To maintain sanity and scalability, the codebase enforces strict boundaries. Eng
     └── infrastructure/             # INTERNAL SERVICES
         ├── cache/                  # Redis connection manager
         └── system-db/              # MongoDB/Mongoose connection for the Control Plane
-
+```
 ---
 
 ## 5. System Maturity Stages (Action Plan)
@@ -301,7 +306,7 @@ A mature BaaS doesn't just serve data; it measures it. However, calculating bill
 Instead, our Data Plane is strictly an *emitter* of **Usage Events**. 
 Every time a query executes, a file is uploaded, or an `isolated-vm` hook runs, the Data Plane pushes an event to an asynchronous queue (**BullMQ**). 
 
-~~~typescript
+```typescript
 // Example of a Usage Event emitted by the Data Plane
 {
   "tenantId": "ws_123",
@@ -309,7 +314,7 @@ Every time a query executes, a file is uploaded, or an `isolated-vm` hook runs, 
   "unitsConsumed": 15, // e.g., rows returned
   "timestamp": "2026-03-04T17:55:00Z"
 }
-~~~
+```
 
 The Control Plane houses the **Billing Aggregator** (Accumulator), which consumes these events asynchronously, calculates tier limits, and generates invoices.
 
