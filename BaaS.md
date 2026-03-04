@@ -23,145 +23,138 @@
 
    * Each tenant has its own database.
    * Greater isolation and security.
-   *  Más costoso en operaciones y conexión. ([xappifai.com][2])
+   * More expensive in operations and connections. ([xappifai.com][2])
 
 ---
 
-## **Control Plane vs Data Plane (Arquitectura SaaS)**
+## **Control Plane vs Data Plane (SaaS Architecture)**
 
 ### **Control Plane**
 
-Administra:
+Manages:
 
-* Gestión de tenants (alta/baja)
-* Políticas de acceso
-* Configuraciones globales
-* Facturación y planes
-  Este plano no debería manejar datos sensibles del tenant directamente. ([wild.codes][4])
+* Tenant management (onboarding/offboarding)
+* Access policies
+* Global configurations
+* Billing and plans
+  This plane should not handle sensitive tenant data directly. ([wild.codes][4])
 
-### 🔹 **Data Plane**
+### **Data Plane**
 
-Maneja:
+Handles:
 
-* Peticiones de dato
-* CRUD y lógica específica
-* Conexiones a DBs por tenant
-  Y debe escalar independientemente del control plane. ([wild.codes][4])
-
----
-
-## 🔐 3) **Permisos y Autorización**
-
-🔎 Lo que debes investigar:
-
-* **RBAC** — Roles fijos (admin, editor, usuario).
-* **ABAC** — Policy por atributos (rol *y* condiciones de negocio).
-* **ReBAC** — Basado en relaciones (ej: owners y recursos).
-
-En multi-tenant la separación de roles y permisos debe respetar el *tenant boundary*.
-
-💡 Deberías mirar patrones de autorización reforzados por la base de datos y por política en el middleware. ([Coretus Technologies][5])
+* Data requests
+* CRUD and specific logic
+* DB connections per tenant
+  And must scale independently from the control plane. ([wild.codes][4])
 
 ---
 
-## 🚀 4) **Escalabilidad y Rendimiento**
+## **Permissions and Authorization**
 
-### 📌 Cache y tenant-aware caching
+* **RBAC** — Fixed roles (admin, editor, user).
+* **ABAC** — Attribute-based policy (role *and* business conditions).
+* **ReBAC** — Relationship-based (e.g., owners and resources).
 
-* Cache por tenant → evita contaminación de datos. ([UMA Technology][6])
-
-### 📌 API Gateway multitenancy
-
-* **Rate limiting por tenant**
-* **CORS y WAF por tenant**
-* **Tenant-scoped metrics** para observabilidad. ([UMA Technology][6])
+In multi-tenant, the separation of roles and permissions must respect the *tenant boundary*.
 
 ---
 
-## 📊 5) **Observabilidad Multi-Tenant**
+## **Scalability and Performance**
 
-No basta con métricas globales.
+### Cache and tenant-aware caching
 
-Debes:
+* Cache per tenant → prevents data contamination. ([UMA Technology][6])
 
-* Guardar métricas *por tenant* (p95, errores)
-* Loggear con tenant ID para auditoría
-* Implementar trazas distribuidas con contexto tenant
+### API Gateway multitenancy
 
-Esto te permitirá reaccionar a cuellos de botella por cliente. ([Coretus Technologies][5])
-
----
-
-## 💳 6) **Billing & Usage Metering**
-
-La arquitectura SaaS madura no solo sirve datos, también:
-
-* Cuenta llamadas API por tenant
-* Calcula almacenamiento usado por tenant
-* Genera planes y límites por niveles
-* Produce reportes y facturas
-  Es decir: debes tener *eventos de uso* y *acumuladores* en el control plane. ([Coretus Technologies][5])
+* **Rate limiting per tenant**
+* **CORS and WAF per tenant**
+* **Tenant-scoped metrics** for observability. ([UMA Technology][6])
 
 ---
 
-## 🔁 7) **Evolución de Schema y Metadata Versioning**
+## **Multi-Tenant Observability**
 
-Conceptos clave:
+* Store metrics *per tenant* (p95, errors)
+* Log with tenant ID for auditing
+* Implement distributed traces with tenant context
 
-* **Versionamiento de metadata:** cada cambio en el schema debe ir asociado a un *version tag*.
-* **Backups de metadatos y rollback:** necesitarás mecanismos para volver a un estado anterior.
-* **Migraciones desencadenadas por eventos:** puedes aplicar migraciones globales o por tenant.
-
-Este tema suele estar en libros y artículos avanzados de arquitectura SaaS e ingeniería de datos (p. ej. O’Reilly sobre SaaS). ([O'Reilly Media][7])
+This will allow us to react to bottlenecks per client. ([Coretus Technologies][5])
 
 ---
 
-## 📦 8) **Query Abstraction vs DSL**
+## **Billing & Usage Metering**
 
-Tu `IDatabaseAdapter` abstrae CRUD básico, pero un BaaS real suele requerir:
+Mature SaaS architecture not only serves data, it also:
 
-* Filtros complejos (AND/OR)
-* Joins y relaciones
-* Paginación cursor
-* Agregaciones
-* Transacciones multi-tenant
-
-Estudia cómo lo hacen proyectos como Hasura o Prisma — ambos soportan consultas complejas traducidas a múltiples engines.
+* Counts API calls per tenant
+* Calculates storage used per tenant
+* Generates plans and limits by tiers
+* Produces reports and invoices
+  In other words: you must have *usage events* and *accumulators* in the control plane. ([Coretus Technologies][5])
 
 ---
 
-## 🛡 9) **Seguridad, Compliance y Custodia de Datos**
+## **Schema Evolution and Metadata Versioning**
 
-Debes cubrir:
+Key concepts:
 
-* **Aislamiento de datos firmes**
-* **Encriptación at rest/in transit**
-* **Auditoría de accesos**
-* **Protección de logs**
-* **Cumplimiento de GDPR/SOC2**
+* **Metadata versioning:** each schema change must be associated with a *version tag*.
+* **Metadata backups and rollback:** you'll need mechanisms to revert to a previous state.
+* **Event-triggered migrations:** you can apply global or per-tenant migrations.
 
-Esto afecta no solo código, sino también procesos de devops y arquitectura SaaS. ([xappifai.com][2])
+This topic is usually found in advanced books and articles on SaaS architecture and data engineering (e.g., O'Reilly on SaaS). ([O'Reilly Media][7])
 
 ---
 
-## 📈 10) **Infraestructura y Kubernetes Multi-Tenant**
+## **Query Abstraction vs DSL**
 
-Si usas Kubernetes, mira:
+A real BaaS usually requires:
 
-* Namespaces por tenant
-* ResourceQuotas estrictas
+* Basic CRUD
+* Complex filters (AND/OR)
+* Joins and relationships
+* Cursor pagination
+* Aggregations
+* Multi-tenant transactions
+
+Study how projects like Hasura or Prisma do it — both support complex queries translated to multiple engines.
+
+---
+
+## **Security, Compliance, and Data Custody**
+
+It should be covered:
+
+* **Strong data isolation**
+* **Encryption at rest/in transit**
+* **Access auditing**
+* **Log protection**
+* **GDPR/SOC2 compliance**
+
+This affects not only code, but also DevOps processes and SaaS architecture. ([xappifai.com][2])
+
+---
+
+## **Infrastructure and Multi-Tenant Kubernetes**
+
+If we will use Kubernetes, look at:
+
+* Namespaces per tenant
+* Strict ResourceQuotas
 * NetworkPolicies
 * Secret per tenant
 
-Esto no solo da aislamiento de red, también control operativo. ([Isitdev][8])
+This not only provides network isolation, but also operational control. ([Isitdev][8])
 
 ---
 
-## 📌 Resumen de Referencias Clave
+## 📌 Summary of Key References
 
-Áreas cubiertas por contenido real:
+Areas covered by real content:
 
-| Tema                                   | Fuente                      |
+| Topic                                  | Source                      |
 | -------------------------------------- | --------------------------- |
 | Multi-tenant strategies                | ([The Algorithm][1])        |
 | Tenant isolation patterns              | ([xappifai.com][2])         |
@@ -172,17 +165,6 @@ Esto no solo da aislamiento de red, también control operativo. ([Isitdev][8])
 | SaaS design principles                 | ([O'Reilly Media][7])       |
 
 ---
-
-## 🧠 Conclusión
-
-Ya tienes una **colección de conceptos probados y respaldados por prácticas de ingeniería SaaS real** que puedes usar para estructurar tu proyecto:
-
-* Elige un **modelo de aislamiento** (shared vs separate vs DB per tenant).
-* Diseña un **control plane sólido** separado del data plane.
-* Implementa **observabilidad y billing por tenant** desde el día uno.
-* Define claramente **políticas de permisos y versionado de metadata**.
-* Planifica **query abstraction** más allá de CRUD.
-* Asegura **escala y seguridad** en cada componente.
 
 [1]: https://www.the-algo.com/post/saas-architecture-best-practices-in-2025?utm_source=chatgpt.com "SaaS Architecture Best Practices in 2025"
 [2]: https://www.xappifai.com/blog/saas-architecture-complete?utm_source=chatgpt.com "SaaS Architecture: Complete Guide to Building Scalable Multi-Tenant Systems | XAppifai Blog"
