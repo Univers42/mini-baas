@@ -58,6 +58,48 @@ Handles:
 
 In multi-tenant, the separation of roles and permissions must respect the *tenant boundary*.
 
+#### Explanation
+
+| Dimension                          | **RBAC** (Role-Based Access Control) | **ABAC** (Attribute-Based Access Control)                   | **ReBAC** (Relationship-Based Access Control)                           |
+| ---------------------------------- | ------------------------------------ | ----------------------------------------------------------- | ----------------------------------------------------------------------- |
+| **Core Idea**                      | Access based on user role            | Access based on attributes & policies                       | Access based on relationships between entities                          |
+| **Decision Based On**              | `user.role`                          | User attributes + resource attributes + environment context | Graph relationships (user ↔ resource ↔ other entities)                  |
+| **Example Rule**                   | “Admins can delete books”            | “Users can edit books where `ownerId == user.id`”           | “Users can edit books if they are in the same organization as the book” |
+| **Granularity**                    | Coarse-grained                       | Fine-grained                                                | Very fine-grained                                                       |
+| **Row-Level Control**              | ❌ Not native                         | ✅ Yes                                                       | ✅ Yes                                                                   |
+| **Field-Level Control**            | ❌ Hard                               | ✅ Yes                                                       | ✅ Yes                                                                   |
+| **Context-Aware (time, IP, etc.)** | ❌ No                                 | ✅ Yes                                                       | ⚠ Limited                                                               |
+| **Scalability in Simple Systems**  | ✅ Very simple                        | ⚠ Moderate complexity                                       | ❌ Overkill                                                              |
+| **Scalability in Complex SaaS**    | ❌ Becomes messy                      | ✅ Strong                                                    | ✅ Strong                                                                |
+| **Policy Complexity**              | Low                                  | Medium to High                                              | High                                                                    |
+| **Multi-Tenant Suitability**       | Basic separation only                | Very good                                                   | Excellent for org-based SaaS                                            |
+| **Typical Implementation Pattern** | Role → Permission mapping table      | Policy engine evaluates rules dynamically                   | Graph traversal / relationship engine                                   |
+| **Performance Cost**               | Very low                             | Moderate                                                    | Higher (graph queries)                                                  |
+| **Common Use Cases**               | Admin dashboards, internal tools     | SaaS apps with ownership logic                              | Collaborative platforms (Notion, GitHub-style orgs)                     |
+
+#### Example
+
+##### RBAC - Static Role Mapping
+```js
+if (user.role === "admin")
+	allow()
+```
+
+##### ABAC - Policy Evaluation
+```js
+allow if:
+  user.tenantId == resource.tenantId &&
+  resource.ownerId == user.id
+```
+
+##### ReBAC - Graph-Based Authorization
+```js
+allow if:
+  user MEMBER_OF org
+  AND org OWNS project
+  AND project CONTAINS book
+```
+
 ---
 
 ## **Scalability and Performance**
@@ -86,6 +128,13 @@ In multi-tenant, the separation of roles and permissions must respect the *tenan
 
 This will allow us to react to bottlenecks per client. ([Coretus Technologies][5])
 
+#### Definitions
+- In multi-tenant observability, p95 means `95th percentile latency`. It is a statistical measurement used to understand how slow the slowest “almost all” requests are.
+
+So if `p95 latency = 240ms`, it means that:
+- 95% of requests completed in <= 240ms
+- Only 5% were slower than 240ms
+
 ---
 
 ## **Billing & Usage Metering**
@@ -112,11 +161,11 @@ This topic is usually found in advanced books and articles on SaaS architecture 
 
 ---
 
-## **Query Abstraction vs DSL**
+## **Query Abstraction vs DSL (Domain Specific Language)**
 
 A real BaaS usually requires:
 
-* Basic CRUD
+* Basic CRUD (Create, Read, Update, Delete)
 * Complex filters (AND/OR)
 * Joins and relationships
 * Cursor pagination
@@ -154,7 +203,7 @@ This not only provides network isolation, but also operational control. ([Isitde
 
 ---
 
-## 📌 Summary of Key References
+## Summary of Key References
 
 Areas covered by real content:
 
@@ -280,10 +329,10 @@ The Data Plane executes user workloads.
 
 It must be:
 
-* Stateless
-* Horizontally scalable
-* Tenant-aware
-* Adapter-injected per request
+* Stateless: each request must contain all the information required to execute it.
+* Horizontally scalable: we must be able to add more instances to handle more traffic.
+* Tenant-aware: every execution path must carry tenant context (tenantId, schemaVersion, adapterType, policyContext).
+* Adapter-injected per request: each request must dynamically resolve the correct database adapter (PostgersAdapter, MongoAdapter...).
 
 ### **4.1 Request Flow Diagram**
 
@@ -400,7 +449,7 @@ graph TD
 ## **7. Query Abstraction Layer Design**
 Our current CRUD interface is insufficient long-term.
 
-We need a Query DSL.
+We need a Query DSL (Domain Specific Language).
 
 Example of internal representation:
 ```js
@@ -574,6 +623,20 @@ Every tenant must have enforced limits:
 * Max requests per minute
 
 These are defined in control plane and enforced in gateway/data plane.
+
+In our BaaS context, governance means:
+```
+The set of rules, limits, controls, and enforcement mechanisms that ensure the platform is used safely, fairly, predictably, and sustainably.
+```
+
+In our architecture, governance answers questions like:
+
+* Who is allowed to do what?
+* How much can they use?
+* What are the limits?
+* What happens if they exceed them?
+* How do we prevent abuse?
+* How do we ensure compliance?
 
 ## **17. System Maturity Stages**
 
