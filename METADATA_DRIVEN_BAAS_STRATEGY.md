@@ -113,6 +113,38 @@ How do these technologies connect? Let's trace the lifecycle of a single request
 5.  **Hook Execution (isolated-vm):** If the metadata defines an `afterCreate` hook, the `HookRuntime` spins up a secure V8 isolate via **isolated-vm**, injects the newly created record, and executes the user's custom JavaScript function.
 6.  **Response:** The `TransformLayer` normalizes the result and returns a consistent JSON payload to the client.
 
+```mermaid
+sequenceDiagram
+  participant T as Tenant
+  participant API as NestJS (API)
+  participant Config as Metadata (Redis/Mongo)
+  participant DB as Database (Tenant)
+  participant H as Hooks (V8)
+
+  T->>API: POST /api/ws_123/books
+  activate API
+
+  Note over API: 1. Resolution
+  API->>Config: Get schema & config
+  Config-->>API: Tenant's Metadata
+
+  Note over API: 2. Validation
+  API->>API: Validate payload against dynamic schema
+
+  Note over API: 3. Execution
+  API->>DB: Insert new register
+  DB-->>API: Register created
+
+  opt Defined Hook (ej. afterCreate)
+    Note over API: 4. Extensibility
+    API->>H: Execute user's script in safe environment
+    H-->>API: Processed result
+  end
+
+  API-->>T: 200 OK + JSON
+  deactivate API
+```
+
 ---
 
 ## 4. Modular Directory Structure (Domain-Driven Design)
@@ -157,7 +189,7 @@ To maintain sanity and scalability, the codebase enforces strict boundaries. Eng
 
 ## 5. System Maturity Stages (Action Plan)
 
-Building an App Factory requires pragmatic, incremental steps. We cannot build the Query DSL and the Hook Sandbox simultaneously.
+Building an App Factory requires pragmatic, incremental steps. We cannot build the Query DSL, the Hook Sandbox, and the Billing Engine simultaneously.
 
 ### Stage 1: Logical Multi-Tenancy & Metadata Foundation
 * Setup NestJS with the modular DDD structure.
@@ -177,6 +209,116 @@ Building an App Factory requires pragmatic, incremental steps. We cannot build t
 * Evolve the `DynamicService` to understand an internal Query DSL (filtering, sorting, pagination).
 * Implement translation logic in the Adapters to convert the DSL into complex SQL Joins or Mongo Aggregations.
 
-### Stage 5: Hook Execution & Billing
+### Stage 5: Hook Execution & Background Jobs
 * Integrate `isolated-vm` to allow users to save and execute custom JS code securely.
-* Implement usage accumulators (telemetry) in the Data Plane and send events to the Control Plane for billing computation.
+* Implement **BullMQ** to move long-running tasks (like webhooks or email dispatching triggered by hooks) out of the main request cycle.
+
+### Stage 6: Enterprise API Gateway & Observability
+* Build the multi-tenant API Gateway using NestJS Guards/Interceptors to enforce **Rate Limiting, CORS, and WAF** rules dynamically based on the Master Document.
+* Implement tenant-scoped metrics and distributed tracing to monitor **p95 latency** and error rates per individual tenant.
+
+### Stage 7: Billing Engine & Schema Evolution
+* Refactor the Data Plane to emit asynchronous **Usage Events** (reads, writes, hook CPU time) to the Control Plane.
+* Build the Billing Aggregator in the Control Plane to compute tier limits and invoices.
+* Implement **Metadata Versioning** (`version: 1 -> version: 2`) to allow safe, rollback-ready schema evolution without zero-downtime migrations.
+
+## 6. Research & Validation: The Power of Metadata
+
+According to industry research on building metadata-driven architectures (e.g., [Building a Metadata-Driven Data Architecture](https://talent500.com/blog/building-a-metadata-driven-data-architecture/)), metadata acts as the central "compass" that transforms raw data into governable, navigable assets. While traditional data engineering applies this to Data Lakes, our `mini-baas` platform applies these exact same principles to **Application Programming Interfaces (APIs)**.
+
+### Alignment with our App Factory
+The research highlights three types of metadata (Technical, Operational, Business) and three building blocks (Repositories, Catalogs, Lineage). Here is how they perfectly map to our Control Plane / Data Plane architecture:
+
+1. **Metadata Repositories = Our System DB (MongoDB):**
+   The article defines this as the "heart of a metadata-driven architecture" acting as the single source of truth. In `mini-baas`, our MongoDB Control Plane serves this exact purpose. It stores the `TenantMetadata` JSON (the Master Document) instead of hardcoding models in the backend source code.
+2. **Technical & Business Metadata = The Schema & Permissions Objects:**
+   The research notes technical metadata includes "database schemas and data types", while business metadata covers "access controls". Our Master Document explicitly handles both via the `"schema"` property (used by our Adapter Factory and Zod validators) and the `"permissions"` property (used by our IAM/Policy engine).
+3. **Data Catalogs = Our Frontend Discovery API:**
+   Catalogs make metadata "searchable and discoverable". In our ecosystem, this translates to the `/discovery` endpoint, which reads the Control Plane metadata and tells the universal Frontend SDK what entities exist, enabling automatic UI generation without hardcoded API routes.
+4. **Governance & Lineage = Hooks & Background Jobs:**
+   The article stresses documenting data flows for compliance. Our `isolated-vm` Hooks and telemetry/billing events act as our operational metadata generators, tracking when records are manipulated and enforcing business rules globally across the Data Plane.
+
+### Architectural Flow Diagram
+The following diagram illustrates how the building blocks from the research are orchestrated within our specific BaaS infrastructure:
+
+```mermaid
+graph TD
+    subgraph Control_Plane ["Ctrl Plane(Metadata Repo)"]
+        SDB[(MongoDB System DB)]
+        MD[Master Document<br/>- Technical Metadata<br/>- Business Metadata]
+        SDB --- MD
+    end
+
+    subgraph Data_Plane ["Data Plane (Dynamic Engine)"]
+        TCR[Tenant Context Resolver]
+        VE[Validation Engine<br/>Reads Technical Meta]
+        PE[Policy Engine<br/>Reads Business Meta]
+        AF[Adapter Factory<br/>Connects Target DB]
+    end
+
+    subgraph External_Assets ["Tenant Assets"]
+        EDB[(Tenant Postgres/Mongo)]
+        FSDK[Frontend SDK / Discovery Catalog]
+    end
+
+    MD -->|Caches rules via Redis| TCR
+    TCR --> VE
+    TCR --> PE
+    VE --> AF
+    PE --> AF
+    AF -->|Executes dynamic Query| EDB
+    MD -->|Exposes Discovery API| FSDK
+
+    style Control_Plane fill:#ccecff,stroke:#003366,stroke-width:2px,color:#000
+style Data_Plane fill:#ffe0b2,stroke:#663c00,stroke-width:2px,color:#000
+style External_Assets fill:#d6d6d6,stroke:#333333,stroke-width:2px,color:#000
+```
+
+## 7. Enterprise SaaS Capabilities: Scalability, Observability & Evolution
+
+To elevate `mini-baas` from a dynamic API engine to a production-ready SaaS platform, we align our architecture with industry standards for multi-tenancy, observability, and billing (e.g., concepts discussed by [UMA Technology](https://umatechnology.org/) and [Coretus Technologies](https://www.coretus.com/)).
+
+### 7.1 Scalability and API Gateway Multitenancy
+Before a request even reaches our `DynamicController`, it must pass through an API Gateway layer (implemented via NestJS Guards and Interceptors). 
+
+
+
+* **Tenant-Aware Caching:** As mentioned in our isolation strategy, data contamination is prevented by strictly namespacing Redis keys (`tenant:ws_123:query_cache`).
+* **Dynamic CORS & WAF:** Cross-Origin Resource Sharing (CORS) and Web Application Firewall (WAF) rules are not globally hardcoded. They are stored in the Control Plane's Master Document. The gateway applies them per request, ensuring one tenant's compromised frontend doesn't affect others.
+* **Rate Limiting:** We enforce API limits based on the tenant's subscription tier, dropping excess requests at the gateway before they consume Data Plane CPU.
+
+### 7.2 Multi-Tenant Observability
+When running a platform where every request looks different, generic monitoring is blind. We must monitor *per tenant* to react to bottlenecks.
+
+* **Tenant-Scoped Metrics:** Every log, metric, and distributed trace emitted by the Data Plane automatically injects the `tenantId`. 
+* **Understanding p95 Latency:** We track the **95th percentile (p95)** latency per tenant. If a tenant's `p95 = 240ms`, it means 95% of their requests complete in under 240ms, and only the slowest 5% exceed it. This allows us to detect if a specific tenant wrote a bad database query that is slowing down their specific Data Plane instance, without setting off global alarms.
+
+
+
+### 7.3 Billing & Usage Metering (The Event-Driven Approach)
+A mature BaaS doesn't just serve data; it measures it. However, calculating bills inside the API request cycle would destroy performance. 
+
+Instead, our Data Plane is strictly an *emitter* of **Usage Events**. 
+Every time a query executes, a file is uploaded, or an `isolated-vm` hook runs, the Data Plane pushes an event to an asynchronous queue (**BullMQ**). 
+
+~~~typescript
+// Example of a Usage Event emitted by the Data Plane
+{
+  "tenantId": "ws_123",
+  "eventType": "database_read",
+  "unitsConsumed": 15, // e.g., rows returned
+  "timestamp": "2026-03-04T17:55:00Z"
+}
+~~~
+
+The Control Plane houses the **Billing Aggregator** (Accumulator), which consumes these events asynchronously, calculates tier limits, and generates invoices.
+
+### 7.4 Schema Evolution & Metadata Versioning
+Traditional applications handle database schema changes via downtime-inducing SQL migrations (`ALTER TABLE`). In our Metadata-Driven architecture, schema evolution is instantaneous and reversible (a concept widely praised in [O'Reilly's SaaS architecture literature](https://www.oreilly.com/)).
+
+* **Version Tags:** Notice the `version: 1` field in our `TenantMetadata` Master Document. 
+* **Rollbacks:** When a tenant modifies their schema (e.g., adds a required column), we do not overwrite the document. We generate a new Master Document with `version: 2`. If the tenant's frontend breaks, they can instantly rollback the API to `version: 1` by simply flipping the active version pointer in the Control Plane. 
+
+This guarantees that metadata changes—the most dangerous operation in a BaaS—are safe, version-controlled, and instantly deployable.
+
+
