@@ -1,24 +1,38 @@
 # ============================================
-# ft_transcendence — Production Stack
+# mini-baas — Production Stack
 # ============================================
-# Run: make prod  (auto-detects docker compose variant)
-#
-# Services:
-#   - backend:  NestJS (multi-stage build)
-#   - db:       PostgreSQL 16
-#   - redis:    Redis 7 (cache + pub/sub)
-#
-# Compatibility: docker-compose v1.25+ / docker compose v2+
-# Port scheme:   standard (3000, 5432, etc.)
+# Run: make prod
 # ============================================
 
 version: '3.8'
 
 services:
-  # ── PostgreSQL 16 ────────────────────────────────────
-  db:
+  system-db:
+    image: mongo:7
+    container_name: baas-system-db
+    restart: unless-stopped
+    volumes:
+      - mongo-data:/data/db
+    networks:
+      - baas-net
+
+  redis:
+    image: redis:7-alpine
+    container_name: baas-redis
+    restart: unless-stopped
+    command: redis-server --maxmemory 256mb --maxmemory-policy allkeys-lru --save 60 1000
+    volumes:
+      - redis-data:/data
+    networks:
+      - baas-net
+
+  # ── Mock Tenant DB ──────────────────────────────────
+  # Note: In a real production environment, tenant databases
+  # would be hosted on separate clusters (e.g., AWS RDS, Atlas).
+  # We keep it here only if you are self-hosting everything together.
+  tenant-db:
     image: postgres:16-alpine
-    container_name: transcendence-db
+    container_name: baas-tenant-db
     restart: unless-stopped
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
@@ -26,71 +40,34 @@ services:
       POSTGRES_DB: ${POSTGRES_DB}
     volumes:
       - pg-data:/var/lib/postgresql/data
-    healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
     networks:
-      - transcendence
+      - baas-net
 
-  # ── Redis 7 ──────────────────────────────────────────
-  redis:
-    image: redis:7-alpine
-    container_name: transcendence-redis
-    restart: unless-stopped
-    command: >
-      redis-server
-      --maxmemory 256mb
-      --maxmemory-policy allkeys-lru
-      --save 60 1000
-      --loglevel warning
-    volumes:
-      - redis-data:/data
-    healthcheck:
-      test: ["CMD", "redis-cli", "ping"]
-      interval: 10s
-      timeout: 5s
-      retries: 10
-    networks:
-      - transcendence
-
-  # ── Backend (NestJS) ─────────────────────────────────
-  backend:
+  api:
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
-    container_name: transcendence-backend
+    container_name: baas-api
     restart: unless-stopped
     depends_on:
-      db:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      - system-db
+      - redis
     ports:
-      - "${BACKEND_PORT:-3000}:3000"
+      - "${PORT:-3000}:3000"
     environment:
       - NODE_ENV=production
-      - DATABASE_URL=postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
-      - REDIS_URL=redis://redis:6379
-      - JWT_SECRET=${JWT_SECRET}
-      - JWT_EXPIRATION=${JWT_EXPIRATION:-7d}
-      - OAUTH_42_CLIENT_ID=${OAUTH_42_CLIENT_ID}
-      - OAUTH_42_CLIENT_SECRET=${OAUTH_42_CLIENT_SECRET}
-      - OAUTH_42_CALLBACK_URL=${OAUTH_42_CALLBACK_URL}
-      - CORS_ORIGINS=${CORS_ORIGINS}
-      - UPLOAD_DIR=/app/uploads
-      - UPLOAD_MAX_SIZE_MB=${UPLOAD_MAX_SIZE_MB:-5}
-    volumes:
-      - uploads:/app/uploads
+      - PORT=${PORT:-3000}
+      - SYSTEM_DB_URI=mongodb://system-db:27017/baas_control_plane
+      - REDIS_URI=redis://redis:6379
     networks:
-      - transcendence
+      - baas-net
 
 volumes:
+  mongo-data:
   pg-data:
   redis-data:
-  uploads:
 
 networks:
-  transcendence:
+  baas-net:
     driver: bridge
+  

@@ -1,9 +1,5 @@
 # ============================================
-# ft_transcendence — Backend Production Build
-# ============================================
-# Multi-stage build for NestJS backend.
-# Stage 1: Install deps + compile TypeScript
-# Stage 2: Minimal production image with dumb-init
+# mini-baas — Production Build
 # ============================================
 
 # ── Stage 1: Build ───────────────────────────────────
@@ -11,30 +7,26 @@ FROM node:22-alpine AS builder
 
 WORKDIR /app
 
-# Install build dependencies (native addons: bcrypt, sharp)
+# Dependencies to compile isolated-vm
 RUN apk add --no-cache python3 g++ make openssl libc6-compat
 
-# Enable pnpm via corepack
+# Activate pnpm
 ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH"
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy package files first (Docker layer caching)
-COPY apps/backend/package.json apps/backend/pnpm-lock.yaml* ./
+# Copy dependency conf from new path
+COPY backend/package.json backend/pnpm-lock.yaml* ./
 
-# Install all dependencies (including devDependencies for build)
+# Install dependencies
 RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
-# Copy source code + shared types
-COPY apps/backend/ ./
-COPY packages/shared/ ../packages/shared/
+# Copy source code
+COPY backend/ ./
 
-# Generate Prisma client
-RUN pnpm exec prisma generate
-
-# Build TypeScript
+# Compile TypeScript to /dist
 RUN pnpm run build
 
-# Prune devDependencies for production
+# Purge devDependencies for production
 RUN pnpm prune --prod
 
 # ── Stage 2: Production ─────────────────────────────
@@ -42,21 +34,17 @@ FROM node:22-alpine AS production
 
 WORKDIR /app
 
-# Minimal runtime dependencies
+# Minimum dependencies
 RUN apk add --no-cache dumb-init ca-certificates openssl libc6-compat
 
-# Non-root user
+# No priviledge user
 RUN addgroup -g 1001 -S nodejs && \
     adduser -S nestjs -u 1001
 
-# Upload directory
-RUN mkdir -p /app/uploads && chown nestjs:nodejs /app/uploads
-
-# Copy built files from builder
+# copy artifacts from builder
 COPY --from=builder --chown=nestjs:nodejs /app/dist ./dist
 COPY --from=builder --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --from=builder --chown=nestjs:nodejs /app/package*.json ./
-COPY --from=builder --chown=nestjs:nodejs /app/prisma ./prisma
+COPY --from=builder --chown=nestjs:nodejs /app/package.json ./
 
 USER nestjs
 
