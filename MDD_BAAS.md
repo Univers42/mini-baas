@@ -5,6 +5,33 @@
 
 ---
 
+* [1. Key Concepts & Architecture](#1-key-concepts--architecture)
+  * [Metadata-Driven Architecture](#metadata-driven-architecture)
+    * [📄 Example: The "Master Document" (The Tenant's DNA)](#-example-the-master-document-the-tenants-dna)
+    * [💻 Example: Control Plane Implementation (Mongoose)](#-example-control-plane-implementation-mongoose)
+  * [Multi-Tenant Isolation Strategy](#multi-tenant-isolation-strategy)
+* [2. Technology Stack](#2-technology-stack)
+* [3. Request Flow & Orchestration](#3-request-flow--orchestration)
+* [4. Modular Directory Structure (Domain-Driven Design)](#4-modular-directory-structure-domain-driven-design)
+* [5. System Maturity Stages (Action Plan)](#5-system-maturity-stages-action-plan)
+  * [Stage 1: Logical Multi-Tenancy & Metadata Foundation](#stage-1-logical-multi-tenancy--metadata-foundation)
+  * [Stage 2: The Adapter Pattern & Basic Data Plane](#stage-2-the-adapter-pattern--basic-data-plane)
+  * [Stage 3: Dynamic Validation](#stage-3-dynamic-validation)
+  * [Stage 4: Advanced Query DSL & Relations](#stage-4-advanced-query-dsl--relations)
+  * [Stage 5: Hook Execution & Background Jobs](#stage-5-hook-execution--background-jobs)
+  * [Stage 6: Enterprise API Gateway & Observability](#stage-6-enterprise-api-gateway--observability)
+  * [Stage 7: Billing Engine & Schema Evolution](#stage-7-billing-engine--schema-evolution)
+* [6. Research & Validation: The Power of Metadata](#6-research--validation-the-power-of-metadata)
+  * [Alignment with our App Factory](#alignment-with-our-app-factory)
+  * [Architectural Flow Diagram](#architectural-flow-diagram)
+* [7. Enterprise SaaS Capabilities: Scalability, Observability & Evolution](#7-enterprise-saas-capabilities-scalability-observability--evolution)
+  * [7.1 Scalability and API Gateway Multitenancy](#71-scalability-and-api-gateway-multitenancy)
+  * [7.2 Multi-Tenant Observability](#72-multi-tenant-observability)
+  * [7.3 Billing & Usage Metering (The Event-Driven Approach)](#73-billing--usage-metering-the-event-driven-approach)
+  * [7.4 Schema Evolution & Metadata Versioning](#74-schema-evolution--metadata-versioning)
+
+---
+
 ## 1. Key Concepts & Architecture
 
 ### Metadata-Driven Architecture
