@@ -143,10 +143,10 @@ install:  ## 📦 Install backend dependencies
 dev:  ## 🚀 Start dev server (hot reload)
 	$(call step,$(BLUE)ℹ,Starting dev server...)
 	@echo -e "$(GREEN)  → API available at: http://localhost:$${PORT:-3000}/api$(NC)"
-	@docker exec -it $(CONTAINER) sh -c "cd $(BACKEND) && pnpm run start:dev"
+	@docker exec -it $(CONTAINER) pnpm run start:dev
 
 shell:  ## 🐚 Interactive shell in API container
-	@docker exec -it $(CONTAINER) sh
+	@docker exec -it $(CONTAINER) bash
 
 # ============================================
 #  ✅ QUALITY
@@ -182,3 +182,33 @@ help:  ## ❓ Show this help message
 	@echo -e "$(BOLD)mini-baas — Available Commands$(NC)"
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+
+# ============================================
+#  🧹 CLEANUP & REBUILD
+# ============================================
+
+.PHONY: clean fclean re
+
+# Remove only build artifacts (dist folder)
+clean: ## 🧹 Remove build artifacts
+	$(call step,$(YELLOW)⚠,Cleaning build artifacts...)
+	@docker exec $(CONTAINER) rm -rf dist 2>/dev/null || true
+	$(call step,$(GREEN)✓,Clean done)
+
+# Full nuke: remove containers, volumes, and node_modules
+fclean: ## 🧹 Full cleanup (containers + volumes + local modules)
+	@echo -e "$(RED)⚠  Full cleanup — this removes EVERYTHING (DBs, Modules)$(NC)"
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	@$(COMPOSE_DEV) down -v --remove-orphans 2>/dev/null || true
+	@rm -rf backend/node_modules backend/dist 2>/dev/null || true
+	$(call step,$(GREEN)✓,Full cleanup complete)
+
+# Re-run the entire bootstrap sequence
+re: fclean all ## 🔄 Full rebuild from scratch
+
+# ── Updated 'dev' target to handle Ctrl+C (Error 130) ──
+dev: ## 🚀 Start dev server (hot reload)
+	$(call step,$(BLUE)ℹ,Starting dev server...)
+	@echo -e "$(GREEN)  → API available at: http://localhost:$${PORT:-3000}/api$(NC)"
+	@# The '-' before the command tells make to ignore the exit code (fixes Error 130)
+	-@docker exec -it $(CONTAINER) pnpm run start:dev
