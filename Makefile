@@ -107,6 +107,9 @@ preflight: check-docker check-compose check-env check-ports
 
 all: banner preflight bootstrap dev  ## 🚀 Full setup (Docker only)
 
+update:
+	@git submodule update --init --recursive --remote --merge 2>/dev/null || true
+
 banner:
 	$(BANNER)
 
