@@ -5,352 +5,405 @@
 
 ---
 
-* [1. Key Concepts & Architecture](#1-key-concepts--architecture)
-  * [Metadata-Driven Architecture](#metadata-driven-architecture)
-    * [📄 Example: The "Master Document" (The Tenant's DNA)](#-example-the-master-document-the-tenants-dna)
-    * [💻 Example: Control Plane Implementation (Mongoose)](#-example-control-plane-implementation-mongoose)
-  * [Multi-Tenant Isolation Strategy](#multi-tenant-isolation-strategy)
-* [2. Technology Stack](#2-technology-stack)
-* [3. Request Flow & Orchestration](#3-request-flow--orchestration)
-* [4. Modular Directory Structure (Domain-Driven Design)](#4-modular-directory-structure-domain-driven-design)
-* [5. System Maturity Stages (Action Plan)](#5-system-maturity-stages-action-plan)
-  * [Stage 1: Logical Multi-Tenancy & Metadata Foundation](#stage-1-logical-multi-tenancy--metadata-foundation)
-  * [Stage 2: The Adapter Pattern & Basic Data Plane](#stage-2-the-adapter-pattern--basic-data-plane)
-  * [Stage 3: Dynamic Validation](#stage-3-dynamic-validation)
-  * [Stage 4: Advanced Query DSL & Relations](#stage-4-advanced-query-dsl--relations)
-  * [Stage 5: Hook Execution & Background Jobs](#stage-5-hook-execution--background-jobs)
-  * [Stage 6: Enterprise API Gateway & Observability](#stage-6-enterprise-api-gateway--observability)
-  * [Stage 7: Billing Engine & Schema Evolution](#stage-7-billing-engine--schema-evolution)
-* [6. Research & Validation: The Power of Metadata](#6-research--validation-the-power-of-metadata)
-  * [Alignment with our App Factory](#alignment-with-our-app-factory)
-  * [Architectural Flow Diagram](#architectural-flow-diagram)
-* [7. Enterprise SaaS Capabilities: Scalability, Observability & Evolution](#7-enterprise-saas-capabilities-scalability-observability--evolution)
-  * [7.1 Scalability and API Gateway Multitenancy](#71-scalability-and-api-gateway-multitenancy)
-  * [7.2 Multi-Tenant Observability](#72-multi-tenant-observability)
-  * [7.3 Billing & Usage Metering (The Event-Driven Approach)](#73-billing--usage-metering-the-event-driven-approach)
-  * [7.4 Schema Evolution & Metadata Versioning](#74-schema-evolution--metadata-versioning)
+## 1. Preamble: The Horizon and Our Objective
+
+The goal of **mini-baas** is not to build a traditional REST API, but to design an **App Factory**: a dynamic engine capable of provisioning, isolating, and serving multiple applications (Tenants) from a single shared infrastructure. 
+
+We seek to democratize backend development by allowing users to define their data schemas and business logic through configurations (metadata), without the need to write server code or manage deployments. The main challenge is to achieve a perfect balance between **flexibility for the user**, **system performance**, and **security isolation (multi-tenancy)**.
+
+To reach this horizon, it is imperative to reflect on the architectural paradigms available in the industry and justify our technological choices.
 
 ---
 
-## 1. Key Concepts & Architecture
+## 2. Analysis of Architectural Alternatives
+
+There are three major paths in the industry to solve the construction of a BaaS. Each assumes radically different tradeoffs.
+
+### Alternative A: Code and Infrastructure Generation (The Supabase Model)
+The system does not interpret metadata in real-time but acts as a DevOps orchestrator. When creating a Tenant, it deploys dedicated containers and automatically generates REST/GraphQL APIs on top of an isolated physical database.
+* **Pros:** Native performance (no runtime abstraction layers) and perfect security isolation (Hard Isolation).
+* **Cons:** Infrastructure costs skyrocket. Requires a complex Kubernetes ecosystem to manage the lifecycle of thousands of idle containers (scale-to-zero).
+
+### Alternative B: Serverless Edge (The Firebase / Cloudflare Model)
+The central backend container is eliminated. Each Tenant's logic is deployed as Serverless functions at the network edge, connected to a globally distributed NoSQL database.
+* **Pros:** Infinite scalability and minimal latency for the end user.
+* **Cons:** Extreme Vendor Lock-in. It is nearly impossible to deploy this architecture in a local environment (self-hosted) without relying on AWS, Vercel, or Cloudflare.
+
+### Alternative C: Pure NoSQL / Schema-less (The Original Parse / Appwrite Model)
+The complexity of mapping relational schemas is eliminated. The entire system (metadata and client data) lives in a document-oriented database (MongoDB).
+* **Pros:** Maximum iteration speed. Saving data with dynamic shapes is trivial without the need for migrations (`ALTER TABLE`).
+* **Cons:** Weak data integrity. The advantages of relational databases (efficient JOINs, strict ACID transactions) are lost. High risk of the "Noisy Neighbor" problem.
+
+---
+
+### 2.1 Strategic Alignment: The "42 ft_transcendence" Challenge
+In the specific context of the 42 **ft_transcendence** project, architectural choices are not just about performance, but about strategic point acquisition and evaluation survival. The subject mandates a 14-point requirement utilizing diverse modules. 
+
+While most students default to a standard static monolith (which is "safe" but scores low on technical complexity) or microservices (which have a high failure rate during Docker orchestration evaluations), our **Metadata-Driven App Factory** acts as a "Master Key" to natively unlock the highest-value modules.
+
+
+
+#### The 14-Point Target Matrix
+Our architecture natively aligns with several Major (2 pt) and Minor (1 pt) requirements by design:
+
+| Module / Requirement | Metadata-Driven (Ours) | Code Gen / Microservices | Pure Serverless |
+| :--- | :--- | :--- | :--- |
+| **III.2 Docker (Single Command)** | ✅ **Perfect** (One `docker-compose`) | ❌ Very Difficult | ❌ Impossible |
+| **IV.1 Web Frameworks (Major)** | ✅ **2 pts** (NestJS + React) | ✅ Yes | ❌ No |
+| **IV.1 Public API (Major)** | 💎 **2 pts** (Native to BaaS design) | ⚠️ Requires manual build | ✅ Yes |
+| **IV.3 Organization System (Major)**| 💎 **2 pts** (Native Tenant logic) | ⚠️ Complex | ✅ Easy |
+| **IV.10 Custom Module (Major)** | 🏆 **2 pts** (The AST / Metadata Engine itself) | ⚠️ Standard | ❌ No |
+
+*With just the core BaaS functionality, standard Auth, and real-time WebSockets, the 14-point threshold is easily surpassed.*
+
+#### ⚠️ Critical Warning: The "Database Schema" Danger
+The transcendence subject explicitly states: *"The database must have a clear schema and well-defined relations."*
+This is the single biggest threat to Alternative C (Pure NoSQL). If we rely purely on MongoDB's schema-less nature and `Mixed` fields, strict evaluators may reject the project for lacking "well-defined relations."
+**The Solution:** Our strategy mitigates this by enforcing strict Mongoose schemas for the **Control Plane** (documenting the metadata structure clearly) and utilizing the **Adapter Pattern** (Phase 2) to connect a PostgreSQL **Data Plane**. This guarantees we can present a classic Entity-Relationship (ER) diagram during the evaluation, securing the mandatory database requirement.
+
+---
+
+## 3. Our Strategy: Metadata-Driven BaaS
+
+After evaluating the alternatives, the chosen strategy for `mini-baas` is the **Metadata-Driven BaaS** implemented on a modular monolith (NestJS). 
+
+In this model, a single fleet of application containers serves all Tenants. The API's behavior (routes, validations, database connections) mutates at runtime by reading a **Master Document** (JSON) stored in the Control Plane.
+
+### Why is this the ideal strategy in our context?
+1. **Resource Efficiency:** We keep infrastructure costs low. A single server can handle hundreds of idle Tenants at no additional cost.
+2. **Technological Independence (Self-Hosting):** The entire infrastructure can be spun up with a simple `docker-compose`, ensuring the project is portable and auditable.
+3. **Total Control:** By using Node.js with `isolated-vm`, we maintain absolute control over the execution of client Hooks without relying on third-party Serverless functions.
+
+### 3.1 Critical Technical Risks (The "Devil's Advocate" Reality Check)
+While powerful, this architecture introduces severe engineering challenges that must be mitigated:
+* **The "Just-in-Time Validation" Bottleneck:** Compiling Zod/AJV schemas on-the-fly for every request will saturate the Node.js event loop. *Mitigation:* We require a strict Redis pre-warming strategy to avoid "Cold Start" latency spikes.
+* **The `isolated-vm` Memory Trap:** V8 isolates provide security but consume significant RAM. A malicious or poorly written tenant hook (e.g., an infinite loop) can cause an Out-Of-Memory (OOM) crash for the entire API. *Mitigation:* Implementation of strict CPU/Memory quotas and pre-warmed Isolate pools.
+* **Observability Hell:** In a dynamic environment, standard stack traces are useless. *Mitigation:* Distributed tracing is mandatory from Day 1. Every log and database query must be tagged with the `tenantId` and a `correlationId`.
+
+### Tradeoff Matrix
+
+| Paradigm | Code Complexity | Infra Complexity | Schema Flexibility | Self-Hosting (Local) |
+| :--- | :--- | :--- | :--- | :--- |
+| **Metadata-Driven (Ours)** | **High** (Dynamic interpreters) | **Medium** (Docker / NestJS) | **Medium** (Requires adapters) | **Excellent** |
+| Code Generation (Supabase) | Low (Standard code) | Very High (Kubernetes) | Low (Requires migrations) | Complex |
+| Serverless Edge (Firebase) | Medium | Low (Managed Cloud) | High (Distributed NoSQL) | Impossible / Simulated |
+| Pure NoSQL (Parse) | Very Low | Low (MongoDB only) | Maximum | Excellent |
+
+---
+
+## 4. The Universal Abstraction Engine (Reality Check & Pivot)
+
+For the Metadata-Driven model to be truly powerful, the system must eventually hide the complexity of the underlying database from the Tenant via a true agnostic adapter.
+
+### The Illusion of "Universal Abstraction"
+Initially, aiming for immediate SQL-to-NoSQL translation creates a "Lowest Common Denominator" problem. If we treat Postgres like Mongo, we lose complex `JOINs` and strict foreign keys. If we treat Mongo like Postgres, we suffer from expensive `$lookup` operations. Building an Abstract Syntax Tree (AST) translator that perfectly handles both paradigms on Day 1 is an extreme technical risk that stalls development.
+
+### The Evolutionary Hybrid Approach (Our Implementation Pivot)
+To unblock development while preserving the agnostic vision (and satisfying the ft_transcendence schema requirements), we adopt a phased approach:
+
+**Phase 1: MongoDB Default Engine (The MVP)**
+We use MongoDB for *both* the Control Plane and the Data Plane initially.
+* By doing this, the "translation" layer is minimal. Our backend validates the generic JSON request and pushes it directly into the tenant's MongoDB collection.
+* We leverage MongoDB's native `JSON Schema Validation` and `$lookup` stages to simulate relational integrity where needed.
+* *Advantage:* High development speed. The system becomes functional in weeks, not months.
+
+**Phase 2: The "Phantom Adapter" Strategy (The transcendence Shield)**
+Even though we only use MongoDB initially, we strictly enforce the `IDatabaseDriver` interface. The system *believes* it is using an agnostic adapter. 
+
+~~~mermaid
+classDiagram
+    class DynamicService {
+        +executeAST(query: ASTQuery)
+    }
+    class IDatabaseDriver {
+        <<interface>>
+        +execute(query: ASTQuery)
+    }
+    class MongoAdapter {
+        +execute(query: ASTQuery)
+        -translateToMongoQueries()
+    }
+    class PostgresAdapter {
+        +execute(query: ASTQuery)
+        -translateToKnexSQL()
+    }
+    DynamicService --> IDatabaseDriver : depends on
+    IDatabaseDriver <|-- MongoAdapter : Phase 1 (MVP)
+    IDatabaseDriver <|-- PostgresAdapter : Phase 2 (ft_transcendence Defense)
+~~~
+
+~~~typescript
+export interface ASTQuery {
+  collection: string;
+  where?: Record<string, any>;
+  include?: string[];
+}
+
+export interface IDatabaseDriver {
+  execute(query: ASTQuery): Promise<any>;
+}
+~~~
+This guarantees that for our final evaluation, we can implement the `src/engines/sql/` PostgreSQL adapter, providing the "well-defined relations" requested by the subject, without rewriting the core business logic.
+
+**Phase 3 (Future): Auto-Provisioning and Intelligent Routing**
+Once the SQL driver is mature, we delegate the database engine decision to the BaaS itself. By analyzing the schema uploaded by the Tenant, the system will decide to provision a PostgreSQL database (high relationality) or MongoDB (deeply nested documents), without human intervention.
+
+---
+
+## 5. Key Concepts & Architecture
 
 ### Metadata-Driven Architecture
-Most backends are static: a developer writes a schema and deploys. This breaks completely for a platform like ours. **The backend has zero knowledge of any user's data model at build time.** Instead of hardcoded ORM models (like Prisma or TypeORM entities), users define their data model as JSON metadata. This "Master Document" is stored in our **System DB**. At request time, NestJS reads this metadata, builds a runtime validator, and generates a dynamic query builder on the fly. The backend *becomes* the right backend for each user, on every request.
+Most backends are static. **Our backend has zero knowledge of any user's data model at build time.** Instead of hardcoded ORM models, users define their data model as JSON metadata (The "Master Document").
 
 #### 📄 Example: The "Master Document" (The Tenant's DNA)
-This JSON document represents everything the Data Plane needs to know to serve a specific tenant. It replaces static code completely.
-
-```json
-    {
-      "_id": "64a7b...89c",
-      "tenantId": "ws_123",
-      "status": "active",
-      "database": {
-        "engine": "postgresql",
-        "uri": "postgres://user:pass@db.example.com:5432/tenant_db"
-      },
-      "schema": {
-        "books": {
-          "fields": {
-            "title": { "type": "string", "required": true },
-            "price": { "type": "number", "default": 0 }
-          }
-        }
-      },
-      "hooks": {
-        "books": {
-          "beforeCreate": "function(data) { if(data.price < 0) throw new Error('Invalid price'); return data; }"
-        }
-      },
-      "permissions": {
-        "books": { "read": ["public", "admin"], "create": ["admin"] }
-      },
-      "version": 1
+~~~json
+{
+  "_id": "64a7b...89c",
+  "tenantId": "ws_123",
+  "status": "active",
+  "database": {
+    "engine": "mongodb",
+    "uri": "mongodb://user:pass@db.example.com:27017/tenant_db"
+  },
+  "schema": {
+    "books": {
+      "fields": {
+        "title": { "type": "string", "required": true },
+        "price": { "type": "number", "default": 0 }
+      }
     }
-```
-
+  },
+  "hooks": {
+    "books": {
+      "beforeCreate": "function(data) { if(data.price < 0) throw new Error('Invalid price'); return data; }"
+    }
+  },
+  "permissions": {
+    "books": { "read": ["public", "admin"], "create": ["admin"] }
+  },
+  "version": 1
+}
+~~~
 
 #### 💻 Example: Control Plane Implementation (Mongoose)
-To store this flexible, schema-less structure in our System DB, we use MongoDB and Mongoose. Here is how the schema is defined in the Control Plane:
+~~~typescript
+import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
+import { Document, Schema as MongooseSchema } from 'mongoose';
 
-```typescript
-    import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
-    import { Document, Schema as MongooseSchema } from 'mongoose';
+@Schema({ timestamps: true })
+export class TenantMetadata extends Document {
+  @Prop({ required: true, unique: true, index: true })
+  tenantId: string;
 
-    @Schema({ timestamps: true })
-    export class TenantMetadata extends Document {
-      @Prop({ required: true, unique: true, index: true })
-      tenantId: string; // e.g., 'ws_123'
+  @Prop({ required: true })
+  status: string;
 
-      @Prop({ required: true })
-      status: string; // 'active', 'suspended'
+  @Prop({ type: MongooseSchema.Types.Mixed, required: true })
+  database: { engine: 'postgresql' | 'mongodb' | 'mysql'; uri: string };
 
-      @Prop({ type: MongooseSchema.Types.Mixed, required: true })
-      database: { engine: 'postgresql' | 'mongodb' | 'mysql'; uri: string };
+  @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
+  schema: Record<string, any>;
 
-      @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
-      schema: Record<string, any>; // The dynamic dictionary of tables/collections
+  @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
+  hooks: Record<string, any>;
 
-      @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
-      hooks: Record<string, any>; // JS code stored as text for isolated-vm
+  @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
+  permissions: Record<string, any>;
 
-      @Prop({ type: MongooseSchema.Types.Mixed, default: {} })
-      permissions: Record<string, any>; // RBAC/ABAC rules
-
-      @Prop({ default: 1 })
-      version: number;
-    }
-
-    export const TenantMetadataSchema = SchemaFactory.createForClass(TenantMetadata);
-```
-*(Reference: [https://mongoosejs.com/docs/schematypes.html#mixed](https://mongoosejs.com/docs/schematypes.html#mixed) )*
+  @Prop({ default: 1 })
+  version: number;
+}
+export const TenantMetadataSchema = SchemaFactory.createForClass(TenantMetadata);
+~~~
 
 ### Multi-Tenant Isolation Strategy
-To securely serve unbounded tenant diversity, the platform is strictly divided into two macro domains:
-* **The Control Plane:** Responsible for governance. It manages tenant lifecycles, billing, policies, and stores the metadata (the schema definitions and configurations). Control plane failure must *not* break data plane execution.
-* **The Data Plane:** The stateless, horizontally scalable runtime that executes user workloads. It caches metadata, validates incoming data, and injects the right database adapter per request.
+To securely serve unbounded tenant diversity, isolation is enforced at three distinct layers:
 
-**Isolation is enforced at three layers:**
-1.  **Data Isolation Strategy:** A hybrid model: Shared DB + Separate Schemas. Small tenants use a Shared DB with Row-Level Security (or tenant-ID scopes). Enterprise tenants get a dedicated database.
-2.  **Compute Isolation:** Strict resource quotas and the use of sandboxed environments for custom user code.
-3.  **Cache Isolation:** Every cache key in Redis is strictly namespaced (e.g., `tenant:ws_123:metadata`).
+~~~mermaid
+graph TD
+    Req[Incoming Request] --> Interceptor[Tenant Interceptor]
+    Interceptor --> |"tenant_id: ws_123"| Cache[(Redis Namespace: <br/> tenant:ws_123)]
+    
+    Cache --> Runtime[Data Plane Runtime]
+    
+    subgraph Compute Isolation
+        Runtime --> V8[isolated-vm Sandbox <br/> Strict CPU/RAM limits]
+    end
+    
+    subgraph Data Isolation
+        Runtime --> DB1[(Shared MongoDB <br/> Tenant Scoped Collections)]
+        Runtime --> DB2[(Dedicated PostgreSQL <br/> Enterprise Tenant)]
+    end
+~~~
 
----
-
-## 2. Technology Stack
-
-To achieve this dynamic behavior, we selected a stack optimized for modularity, runtime flexibility, and isolation.
-
-| Layer | Technology | Why it's the right choice | Docs |
-|-------|------------|---------------------------|------|
-| **Framework** | NestJS (TypeScript) | Its powerful Dependency Injection (DI) and Request-Scoped providers are essential for implementing the Adapter Pattern. It allows us to inject a different DB engine per request. | NestJS |
-| **System DB** | MongoDB & Mongoose | Perfect for the Control Plane. Schemas (metadata) are inherently dynamic, nested JSON objects. A document database allows us to store and evolve tenant configurations without writing SQL migrations. | MongoDB |
-| **SQL Engine** | Knex.js | A dynamic query builder. Since we don't have static models, Knex allows us to construct complex SQL queries (SELECT, JOIN) from abstract JSON syntax trees at runtime. | Knex.js |
-| **NoSQL Engine** | MongoDB Native Driver | Provides direct, schema-free collection access for tenants bringing their own NoSQL databases. | Mongo Node |
-| **Validation** | AJV / Zod | Since we lack TypeScript DTOs, these tools allow us to compile validation schemas directly from the stored JSON metadata at runtime to secure the Data Plane. | Zod |
-| **Sandbox** | isolated-vm | Safely executes user-defined JavaScript hooks (onCreate, onUpdate). It creates a secure V8 isolate so untrusted user code cannot access or crash our Node.js environment. | isolated-vm |
-| **Cache & Jobs** | Redis + BullMQ | Tenant-aware caching for metadata (crucial for performance) and async task queues for webhooks and background jobs. | BullMQ |
+1. **Data Isolation Strategy:** A hybrid model. Small tenants use a Shared DB with tenant-scoped constraints. Enterprise tenants get a dedicated database.
+2. **Compute Isolation:** Strict resource quotas and the use of sandboxed environments (`isolated-vm`) for custom user code.
+3. **Cache Isolation:** Every cache key in Redis is strictly namespaced.
 
 ---
 
-## 3. Request Flow & Orchestration
+## 6. Technology Stack
 
-How do these technologies connect? Let's trace the lifecycle of a single request: `POST /api/ws_123/books`
+To support the **Evolutionary Hybrid Approach**, our stack is divided into immediate MVP technologies and Phase 2 expansion tools.
 
-1.  **Intercept & Context (NestJS + Redis):** The `TenantInterceptor` reads the `ws_123` ID from the URL/Header. It checks **Redis** for the tenant's cached metadata. If missing, it fetches the "Master Document" from the **MongoDB System DB** and caches it.
-2.  **Adapter Injection (NestJS DI):** The `DatabaseProvider Factory` reads the tenant's config (`dbType: "postgresql"`). NestJS dynamically instantiates the `PostgresAdapter` with the tenant's connection string and injects it into the request scope.
-3.  **Dynamic Validation (AJV/Zod):** The `DynamicController` receives the generic payload. The `ValidationEngine` extracts the `books` schema from the metadata, compiles it into a Zod/AJV rule, and validates the incoming JSON body.
-4.  **Query Execution (Knex / Mongo Driver):** The `DynamicService` calls `this.db.create('books', validatedData)`. The `PostgresAdapter` uses **Knex.js** to translate this into an `INSERT INTO books...` SQL statement and executes it against the external tenant database.
-5.  **Hook Execution (isolated-vm):** If the metadata defines an `afterCreate` hook, the `HookRuntime` spins up a secure V8 isolate via **isolated-vm**, injects the newly created record, and executes the user's custom JavaScript function.
-6.  **Response:** The `TransformLayer` normalizes the result and returns a consistent JSON payload to the client.
+| Layer | Technology | Why it's the right choice |
+|-------|------------|---------------------------|
+| **Framework** | NestJS | Its Dependency Injection allows us to dynamically inject the correct Database Adapter per request. |
+| **System DB** | MongoDB (Mongoose) | Perfect for the Control Plane. Schemas (metadata) are inherently dynamic, nested JSON objects. |
+| **Data Plane (Phase 1)** | Mongo Node Driver | Acts as our MVP Data Plane engine. Bypasses the need for complex AST-to-SQL translation on Day 1, allowing rapid development. |
+| **Data Plane (Phase 2)** | Knex.js (PostgreSQL) | **The ft_transcendence Shield.** A dynamic query builder to construct SQL queries at runtime, fulfilling the strict "well-defined relations" requirement for final evaluation. |
+| **Validation** | Zod | Compiles validation schemas directly from stored JSON metadata at runtime, protecting the Data Plane. |
+| **Sandbox** | isolated-vm | Safely executes user-defined JavaScript hooks in secure V8 isolates with strict memory boundaries. |
+| **Cache & Jobs** | Redis + BullMQ | Tenant-aware caching (crucial for dynamic metadata) and async task queues for billing events and background jobs. |
 
-```mermaid
+---
+
+## 7. Request Flow & Orchestration (The Phantom Adapter in Action)
+
+How do these technologies connect dynamically? Let's trace the lifecycle of a `POST /api/ws_123/books` request, highlighting the adapter abstraction:
+
+1.  **Intercept & Context:** `TenantInterceptor` reads the `ws_123` ID. It fetches the "Master Document" from the Redis cache (or MongoDB System DB if missing).
+2.  **Validation (Zod):** The `ValidationEngine` compiles the `books` schema from the Master Document and strictly validates the incoming JSON payload.
+3.  **Adapter Injection (The Switch):** NestJS reads the tenant's `database.engine` preference. It dynamically instantiates the class implementing `IDatabaseDriver` (e.g., `MongoAdapter` for Phase 1, or `PostgresAdapter` for Phase 2).
+4.  **Query Execution:** The `DynamicService` remains completely blind to the underlying database. It simply calls `this.db.create('books', validatedData)`. The injected adapter handles the native execution.
+5.  **Hook Execution:** If defined in the metadata, `HookRuntime` spins up a secure V8 isolate, injects the new record, and executes the tenant's custom JS functions.
+
+~~~mermaid
 sequenceDiagram
   participant T as Tenant
   participant API as NestJS (API)
   participant Config as Metadata (Redis/Mongo)
-  participant DB as Database (Tenant)
+  participant Adapt as IDatabaseDriver
+  participant DB as Tenant Database
   participant H as Hooks (V8)
 
   T->>API: POST /api/ws_123/books
   activate API
 
-  Note over API: 1. Resolution
-  API->>Config: Get schema & config
-  Config-->>API: Tenant's Metadata
+  Note over API: 1. Context & Validation
+  API->>Config: Get schema & DB config
+  Config-->>API: Master Document
+  API->>API: Validate payload (Zod)
 
-  Note over API: 2. Validation
-  API->>API: Validate payload against dynamic schema
-
-  Note over API: 3. Execution
-  API->>DB: Insert new register
-  DB-->>API: Register created
+  Note over API, Adapt: 2. Adapter Pattern
+  API->>Adapt: execute({ action: 'create', ... })
+  
+  Note over Adapt, DB: 3. Execution (Mongo or PG)
+  Adapt->>DB: Native Insert (insertOne / INSERT)
+  DB-->>Adapt: Register created
+  Adapt-->>API: Normalized Result
 
   opt Defined Hook (ej. afterCreate)
     Note over API: 4. Extensibility
-    API->>H: Execute user's script in safe environment
+    API->>H: Execute JS in isolated-vm
     H-->>API: Processed result
   end
 
   API-->>T: 200 OK + JSON
   deactivate API
-```
+~~~
 
 ---
 
-## 4. Modular Directory Structure (Domain-Driven Design)
+## 8. Modular Directory Structure (Domain-Driven Design)
 
-To maintain sanity and scalability, the codebase enforces strict boundaries. Engines know nothing about HTTP, and Controllers know nothing about SQL.
+To maintain sanity, the codebase enforces strict boundaries. Controllers know nothing about SQL or NoSQL; they only speak to the `IDatabaseDriver` interface.
 
-```plaintext
-    src/
-    ├── main.ts                     # Application entry point
-    ├── app.module.ts               # Root module assembling the App Factory
-    │
-    ├── common/                     # Shared tools (Business-agnostic)
-    │   ├── interceptors/           # e.g., TenantInterceptor (resolves tenant context)
-    │   ├── interfaces/             # e.g., IDatabaseAdapter contract
-    │   └── exceptions/             # Global error filters
-    │
-    ├── modules/                    # Core Application Modules
-    │   │
-    │   ├── control-plane/          # GOVERNANCE (No tenant data touches here)
-    │   │   ├── tenant/             # Tenant lifecycle and DB credential management
-    │   │   ├── metadata/           # CRUD for schema definitions (The Master Documents)
-    │   │   └── iam/                # Auth & Policy Engine (RBAC/ABAC definitions)
-    │   │
-    │   ├── data-plane/             # EXECUTION (Stateless runtime)
-    │   │   ├── dynamic-api/        # The single DynamicController & DynamicService
-    │   │   ├── validation/         # Zod/AJV dynamic schema compilers
-    │   │   └── transformation/     # Payload normalizers
-    │   │
-    │   ├── engines/                # THE ADAPTERS (Database agnostic translators)
-    │   │   ├── core/               # DatabaseProvider Factory
-    │   │   ├── sql/                # Knex.js implementation
-    │   │   └── nosql/              # MongoDB Native implementation
-    │   │
-    │   └── runtime/                # CUSTOM LOGIC (User-defined operations)
-    │       ├── hooks/              # isolated-vm sandbox manager
-    │       └── background-jobs/    # BullMQ async workers
-    │
-    └── infrastructure/             # INTERNAL SERVICES
-        ├── cache/                  # Redis connection manager
-        └── system-db/              # MongoDB/Mongoose connection for the Control Plane
-```
+~~~plaintext
+src/
+├── main.ts                     # Application entry point
+├── app.module.ts               # Root module assembling the App Factory
+│
+├── common/                     # Shared tools (Business-agnostic)
+│   ├── interceptors/           # e.g., TenantInterceptor
+│   ├── interfaces/             # IDatabaseDriver and ASTQuery contracts
+│
+├── modules/
+│   ├── control-plane/          # GOVERNANCE (Tenant lifecycle, Metadata schemas)
+│   ├── data-plane/             # EXECUTION (Dynamic API, Zod Validation)
+│   ├── engines/                # ADAPTERS (The Translation Layer)
+│   │   ├── core/               # DatabaseProvider Factory
+│   │   ├── nosql/              # MongoAdapter (Phase 1 MVP)
+│   │   └── sql/                # PostgresAdapter/Knex (Phase 2 Shield)
+│   │
+│   └── runtime/                # CUSTOM LOGIC (Hooks/V8, BullMQ Jobs)
+│
+└── infrastructure/             # INTERNAL SERVICES (Redis Cache, System-DB Mongo)
+~~~
+
 ---
 
-## 5. System Maturity Stages (Action Plan)
+## 9. System Maturity Stages (Action Plan)
 
-Building an App Factory requires pragmatic, incremental steps. We cannot build the Query DSL, the Hook Sandbox, and the Billing Engine simultaneously.
+Building an App Factory requires pragmatic steps. We cannot build the SQL translator, the V8 Sandbox, and the Billing Engine simultaneously. 
 
-### Stage 1: Logical Multi-Tenancy & Metadata Foundation
-* Setup NestJS with the modular DDD structure.
-* Implement the `infrastructure/system-db` using **MongoDB** to store the `TenantMetadata` JSON.
-* Implement the `TenantInterceptor` to resolve tenant context from requests.
+### Stage 1: Logical Multi-Tenancy & Governance
+* Implement `infrastructure/system-db` (MongoDB) to store the `TenantMetadata` JSON.
+* Build the `TenantInterceptor` to resolve tenant context from HTTP requests.
+* Set up Redis for metadata caching to prevent System DB bottlenecking.
 
-### Stage 2: The Adapter Pattern & Basic Data Plane
-* Define the `IDatabaseAdapter` interface.
-* Implement a basic `SqlEngine` (Knex) and `NoSqlEngine` (Mongo).
-* Create the `DynamicController` capable of routing basic CRUD operations to the correct injected adapter.
+### Stage 2: The Phantom Adapter & NoSQL Data Plane (MVP)
+* Define the generic `IDatabaseDriver` interface.
+* Implement the `MongoAdapter` as the default engine.
+* Create the `DynamicController` capable of routing basic CRUD operations via the interface.
+* *Milestone:* The BaaS can create/read dynamic entities using pure MongoDB.
 
-### Stage 3: Dynamic Validation
-* Integrate Zod or AJV in the `data-plane/validation` module.
-* Ensure that every `POST` or `PATCH` request is validated against the specific schema defined in the tenant's MongoDB metadata document.
+### Stage 3: Dynamic Security (Validation)
+* Integrate **Zod** in the `data-plane/validation` module.
+* Parse the JSON schema from the Master Document and enforce it on every incoming `POST/PATCH` request.
 
-### Stage 4: Advanced Query DSL & Relations
-* Evolve the `DynamicService` to understand an internal Query DSL (filtering, sorting, pagination).
-* Implement translation logic in the Adapters to convert the DSL into complex SQL Joins or Mongo Aggregations.
+### Stage 4: The PostgreSQL Shield (ft_transcendence Defense)
+* Implement the `PostgresAdapter` in `src/engines/sql/` using **Knex.js**.
+* Write the AST-to-SQL translation logic.
+* *Milestone:* We can now officially present a strict Entity-Relationship (ER) diagram for Enterprise tenants, fully satisfying the 42 evaluation constraints.
 
-### Stage 5: Hook Execution & Background Jobs
-* Integrate `isolated-vm` to allow users to save and execute custom JS code securely.
-* Implement **BullMQ** to move long-running tasks (like webhooks or email dispatching triggered by hooks) out of the main request cycle.
+### Stage 5: Compute Isolation (Hooks)
+* Integrate `isolated-vm`.
+* Build the `HookRuntime` to securely execute the JavaScript strings stored in the metadata without crashing the Node.js event loop.
+* Enforce strict CPU and memory timeouts for the V8 isolates.
 
-### Stage 6: Enterprise API Gateway & Observability
-* Build the multi-tenant API Gateway using NestJS Guards/Interceptors to enforce **Rate Limiting, CORS, and WAF** rules dynamically based on the Master Document.
-* Implement tenant-scoped metrics and distributed tracing to monitor **p95 latency** and error rates per individual tenant.
+### Stage 6: Enterprise API Gateway & Billing
+* Build a multi-tenant Gateway (Dynamic CORS, Rate Limiting per tenant).
+* Refactor the Data Plane to emit asynchronous **Usage Events** to BullMQ for the Control Plane's Billing Aggregator.
 
-### Stage 7: Billing Engine & Schema Evolution
-* Refactor the Data Plane to emit asynchronous **Usage Events** (reads, writes, hook CPU time) to the Control Plane.
-* Build the Billing Aggregator in the Control Plane to compute tier limits and invoices.
-* Implement **Metadata Versioning** (`version: 1 -> version: 2`) to allow safe, rollback-ready schema evolution without zero-downtime migrations.
+---
 
-## 6. Research & Validation: The Power of Metadata
+## 10. Research & Validation: The Power of Metadata
 
-According to industry research on building metadata-driven architectures (e.g., [Building a Metadata-Driven Data Architecture](https://talent500.com/blog/building-a-metadata-driven-data-architecture/)), metadata acts as the central "compass" that transforms raw data into governable, navigable assets. While traditional data engineering applies this to Data Lakes, our `mini-baas` platform applies these exact same principles to **Application Programming Interfaces (APIs)**.
+According to industry research (e.g., [Building a Metadata-Driven Data Architecture](https://talent500.com/blog/building-a-metadata-driven-data-architecture/)), metadata acts as the central "compass" transforming raw data into governable assets.
 
-### Alignment with our App Factory
-The research highlights three types of metadata (Technical, Operational, Business) and three building blocks (Repositories, Catalogs, Lineage). Here is how they perfectly map to our Control Plane / Data Plane architecture:
+1. **Metadata Repositories = Our System DB (MongoDB):** The single source of truth storing the `TenantMetadata`.
+2. **Technical & Business Metadata = The Schema & Permissions:** Our Master Document explicitly handles both via the `"schema"` and `"permissions"` properties.
+3. **Data Catalogs = Our Frontend Discovery API:** The `/discovery` endpoint reads Control Plane metadata enabling automatic UI generation without hardcoded API routes.
+4. **Governance = Hooks & Jobs:** Our `isolated-vm` Hooks and telemetry events track when records are manipulated, enforcing business rules globally.
 
-1. **Metadata Repositories = Our System DB (MongoDB):**
-   The article defines this as the "heart of a metadata-driven architecture" acting as the single source of truth. In `mini-baas`, our MongoDB Control Plane serves this exact purpose. It stores the `TenantMetadata` JSON (the Master Document) instead of hardcoding models in the backend source code.
-2. **Technical & Business Metadata = The Schema & Permissions Objects:**
-   The research notes technical metadata includes "database schemas and data types", while business metadata covers "access controls". Our Master Document explicitly handles both via the `"schema"` property (used by our Adapter Factory and Zod validators) and the `"permissions"` property (used by our IAM/Policy engine).
-3. **Data Catalogs = Our Frontend Discovery API:**
-   Catalogs make metadata "searchable and discoverable". In our ecosystem, this translates to the `/discovery` endpoint, which reads the Control Plane metadata and tells the universal Frontend SDK what entities exist, enabling automatic UI generation without hardcoded API routes.
-4. **Governance & Lineage = Hooks & Background Jobs:**
-   The article stresses documenting data flows for compliance. Our `isolated-vm` Hooks and telemetry/billing events act as our operational metadata generators, tracking when records are manipulated and enforcing business rules globally across the Data Plane.
+---
 
-### Architectural Flow Diagram
-The following diagram illustrates how the building blocks from the research are orchestrated within our specific BaaS infrastructure:
+## 11. Enterprise SaaS Capabilities: Scalability & Evolution
 
-```mermaid
-graph TD
-    subgraph Control_Plane ["Ctrl Plane(Metadata Repo)"]
-        SDB[(MongoDB System DB)]
-        MD[Master Document<br/>- Technical Metadata<br/>- Business Metadata]
-        SDB --- MD
-    end
+* **Dynamic CORS & WAF:** Rules are stored in the Control Plane's Master Document and applied per request.
+* **Tenant-Scoped Metrics:** Tracking the **95th percentile (p95)** latency per tenant prevents one bad query from triggering global alarms.
+* **Schema Evolution & Metadata Versioning:** Schema changes are instantaneous and reversible. Adding a column generates a new Master Document with `version: 2`. Rollbacks are just a pointer flip in the Control Plane.
+* **Usage Metering (Event-Driven):** Calculating bills inside the API destroys performance. The Data Plane pushes events asynchronously to a queue (BullMQ), enabling the Control Plane to process billing without impacting request latency.
 
-    subgraph Data_Plane ["Data Plane (Dynamic Engine)"]
-        TCR[Tenant Context Resolver]
-        VE[Validation Engine<br/>Reads Technical Meta]
-        PE[Policy Engine<br/>Reads Business Meta]
-        AF[Adapter Factory<br/>Connects Target DB]
-    end
+~~~mermaid
+sequenceDiagram
+    participant Client
+    participant DP as Data Plane (NestJS)
+    participant Q as BullMQ (Redis)
+    participant CP as Control Plane (Billing)
 
-    subgraph External_Assets ["Tenant Assets"]
-        EDB[(Tenant Postgres/Mongo)]
-        FSDK[Frontend SDK / Discovery Catalog]
-    end
-
-    MD -->|Caches rules via Redis| TCR
-    TCR --> VE
-    TCR --> PE
-    VE --> AF
-    PE --> AF
-    AF -->|Executes dynamic Query| EDB
-    MD -->|Exposes Discovery API| FSDK
-
-    style Control_Plane fill:#ccecff,stroke:#003366,stroke-width:2px,color:#000
-style Data_Plane fill:#ffe0b2,stroke:#663c00,stroke-width:2px,color:#000
-style External_Assets fill:#d6d6d6,stroke:#333333,stroke-width:2px,color:#000
-```
-
-## 7. Enterprise SaaS Capabilities: Scalability, Observability & Evolution
-
-To elevate `mini-baas` from a dynamic API engine to a production-ready SaaS platform, we align our architecture with industry standards for multi-tenancy, observability, and billing (e.g., concepts discussed by [UMA Technology](https://umatechnology.org/) and [Coretus Technologies](https://www.coretus.com/)).
-
-### 7.1 Scalability and API Gateway Multitenancy
-Before a request even reaches our `DynamicController`, it must pass through an API Gateway layer (implemented via NestJS Guards and Interceptors). 
-
-
-
-* **Tenant-Aware Caching:** As mentioned in our isolation strategy, data contamination is prevented by strictly namespacing Redis keys (`tenant:ws_123:query_cache`).
-* **Dynamic CORS & WAF:** Cross-Origin Resource Sharing (CORS) and Web Application Firewall (WAF) rules are not globally hardcoded. They are stored in the Control Plane's Master Document. The gateway applies them per request, ensuring one tenant's compromised frontend doesn't affect others.
-* **Rate Limiting:** We enforce API limits based on the tenant's subscription tier, dropping excess requests at the gateway before they consume Data Plane CPU.
-
-### 7.2 Multi-Tenant Observability
-When running a platform where every request looks different, generic monitoring is blind. We must monitor *per tenant* to react to bottlenecks.
-
-* **Tenant-Scoped Metrics:** Every log, metric, and distributed trace emitted by the Data Plane automatically injects the `tenantId`. 
-* **Understanding p95 Latency:** We track the **95th percentile (p95)** latency per tenant. If a tenant's `p95 = 240ms`, it means 95% of their requests complete in under 240ms, and only the slowest 5% exceed it. This allows us to detect if a specific tenant wrote a bad database query that is slowing down their specific Data Plane instance, without setting off global alarms.
-
-
-
-### 7.3 Billing & Usage Metering (The Event-Driven Approach)
-A mature BaaS doesn't just serve data; it measures it. However, calculating bills inside the API request cycle would destroy performance. 
-
-Instead, our Data Plane is strictly an *emitter* of **Usage Events**. 
-Every time a query executes, a file is uploaded, or an `isolated-vm` hook runs, the Data Plane pushes an event to an asynchronous queue (**BullMQ**). 
-
-```typescript
-// Example of a Usage Event emitted by the Data Plane
-{
-  "tenantId": "ws_123",
-  "eventType": "database_read",
-  "unitsConsumed": 15, // e.g., rows returned
-  "timestamp": "2026-03-04T17:55:00Z"
-}
-```
-
-The Control Plane houses the **Billing Aggregator** (Accumulator), which consumes these events asynchronously, calculates tier limits, and generates invoices.
-
-### 7.4 Schema Evolution & Metadata Versioning
-Traditional applications handle database schema changes via downtime-inducing SQL migrations (`ALTER TABLE`). In our Metadata-Driven architecture, schema evolution is instantaneous and reversible (a concept widely praised in [O'Reilly's SaaS architecture literature](https://www.oreilly.com/)).
-
-* **Version Tags:** Notice the `version: 1` field in our `TenantMetadata` Master Document. 
-* **Rollbacks:** When a tenant modifies their schema (e.g., adds a required column), we do not overwrite the document. We generate a new Master Document with `version: 2`. If the tenant's frontend breaks, they can instantly rollback the API to `version: 1` by simply flipping the active version pointer in the Control Plane. 
-
-This guarantees that metadata changes—the most dangerous operation in a BaaS—are safe, version-controlled, and instantly deployable.
-
-
+    Client->>DP: GET /api/ws_123/books
+    activate DP
+    DP->>DP: Execute Query (15ms)
+    DP-->>Client: 200 OK (Data)
+    DP-)Q: Emit Event {type: 'read', tenant: 'ws_123'}
+    deactivate DP
+    
+    Note over Q,CP: Asynchronous Background Process
+    Q-->>CP: Consume Event
+    activate CP
+    CP->>CP: Update Tenant Usage Metrics
+    CP->>CP: Check Tier Limits
+    deactivate CP
+~~~
