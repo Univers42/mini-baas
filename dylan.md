@@ -1,15 +1,3 @@
-# ============================================================================ #
-#                                                                              #
-#                                 FILE HEADER                                  #
-# ---------------------------------------------------------------------------- #
-#  File:       STRATEGY.md                                                     #
-#  Author:     dlesieur                                                        #
-#  Email:      dlesieur@student.42.fr                                          #
-#  Created:    2026/03/10 11:14:26                                             #
-#  Updated:    2026/03/10 11:14:26                                             #
-#                                                                              #
-# ============================================================================ #
-
 # mini-baas — Strategic Architecture Document
 
 > **One Backend to Rule Them All.**
@@ -37,6 +25,74 @@
 
 ---
 
+## layer Architecture
+
+```bash
+.
+├── common
+│   ├── crypto
+│   ├── decorators
+│   ├── exceptions
+│   ├── interceptors
+│   ├── interfaces
+│   ├── schemas
+│   └── types
+├── infrastructure
+│   ├── cache
+│   └── system-db
+├── modules
+│   ├── analytics
+│   ├── api-keys
+│   ├── audit
+│   ├── auth
+│   │   ├── decorators
+│   │   ├── dto
+│   │   ├── guards
+│   │   └── services
+│   ├── control-plane
+│   │   ├── iam
+│   │   ├── metadata
+│   │   │   └── dto
+│   │   ├── provisioner
+│   │   └── tenant
+│   │       └── dto
+│   ├── data-plane
+│   │   ├── dynamic-api
+│   │   ├── transformation
+│   │   └── validation
+│   ├── engines
+│   │   ├── core
+│   │   ├── nosql
+│   │   └── sql
+│   ├── files
+│   ├── gdpr
+│   ├── mail
+│   ├── newsletter
+│   ├── notification
+│   ├── rbac
+│   │   ├── decorators
+│   │   ├── guards
+│   │   └── services
+│   ├── runtime
+│   │   ├── background-jobs
+│   │   └── hooks
+│   ├── security
+│   │   ├── guards
+│   │   └── middleware
+│   ├── session
+│   └── webhook
+└── studio
+    ├── bootstrap
+    ├── collections
+    ├── config
+    ├── environments
+    ├── schemas
+    ├── seeds
+    └── types
+
+61 directories
+
+```
 ## Vision
 
 mini-baas is a **metadata-driven App Factory**. It is the same pattern used internally by Supabase, Hasura, and Appwrite — but fully open, self-hostable, and database-agnostic from day one.
