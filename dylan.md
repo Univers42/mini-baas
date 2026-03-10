@@ -1566,4 +1566,205 @@ Validate the entire BaaS with a real application:
 
 ---
 
+
+Here is the revised and enhanced Strategic Architecture Document. I have expanded the explanations of key concepts like the Control Plane and Data Plane, detailed the "Polyglot Engine" mechanism in a more accessible way, and embedded contextual hyperlinks for further reading.
+
+---
+
+# mini-baas — Strategic Architecture Document
+
+**One Backend to Rule Them All.** A metadata-driven, polyglot Backend-as-a-Service engine that lets any frontend — React, Vue, Angular, Flutter, Swift, Kotlin — run against a single instance of our server, with any database engine, without writing a single line of backend code.
+
+### Table of Contents
+- [Vision](#vision)
+- [Why mini-baas Exists](#why-mini-baas-exists)
+- [Core Principles](#core-principles)
+- [High-Level Architecture](#high-level-architecture)
+- [The Polyglot Engine — How It Works](#the-polyglot-engine--how-it-works)
+- [The Master Document — A Tenant's DNA](#the-master-document--a-tenants-dna)
+- [System Entity Model](#system-entity-model)
+- [Module Inventory](#module-inventory)
+- [Security Architecture](#security-architecture)
+- [Request Lifecycle](#request-lifecycle)
+- [Technology Stack](#technology-stack)
+- [Implementation Phases](#implementation-phases)
+- [Verification & Testing Strategy](#verification--testing-strategy)
+- [Key Architectural Decisions](#key-architectural-decisions)
+- [Codebase Map](#codebase-map)
+- [Future Roadmap](#future-roadmap)
+
+---
+
+## Vision
+
+mini-baas is a metadata-driven **App Factory**. It utilizes the same powerful architectural patterns used internally by platforms like [Supabase](https://supabase.com/), [Hasura](https://hasura.io/), and [Appwrite](https://appwrite.io/). The difference? mini-baas is fully open, self-hostable, and database-agnostic from day one.
+
+The concept is simple:
+1.  You describe your application's data model, permissions, and logic in a single JSON document (the "Master Document").
+2.  mini-baas reads this document at runtime and instantly generates a full-featured backend: a REST API, authentication system, file storage, webhooks, analytics, and more. No code generation, no compilation, no re-deployment.
+3.  Your frontend application communicates with universal endpoints like `GET /api/:tenantId/orders`. mini-baas intelligently figures out whether those "orders" live in [PostgreSQL](https://www.postgresql.org/), [MongoDB](https://www.mongodb.com/), [MySQL](https://www.mysql.com/), or [SQLite](https://www.sqlite.org/).
+
+One backend. Any frontend. Any database. Any business model.
+
+## Why mini-baas Exists
+
+Every modern web and mobile application needs the same foundational 80% of backend functionality. Yet, developers rebuild this repeatedly.
+
+| Capability | Every App Rebuilds It? |
+| :--- | :--- |
+| User registration & login | Yes |
+| JWT/session authentication | Yes |
+| Role-based access control | Yes |
+| CRUD API for entities | Yes |
+| File uploads | Yes |
+| Email sending | Yes |
+| Notifications | Yes |
+| Audit trail | Yes |
+| Webhooks | Yes |
+| Rate limiting | Yes |
+| GDPR compliance tools | Yes |
+
+mini-baas eliminates this repetition. It provides all of the above as universal, database-agnostic modules. The backend doesn't know—and doesn't care—what specific business you're building (a restaurant app, an e-commerce site, or a project management tool). It only understands the *shape* of your data, not its *meaning*. You provide the schema; mini-baas provides the infrastructure.
+
+## Core Principles
+
+### 1. Zero Business Logic Awareness
+The BaaS engine has no inherent knowledge of your domain. It doesn't understand what an "order" or a "product" is. It knows that an entity `orders` has fields `status: string` and `total: decimal`, and it serves a CRUD API, validates payloads, enforces permissions, and logs changes accordingly. This is what makes it truly universal.
+
+### 2. Database Agnosticism (The Polyglot Engine)
+Every module—auth, sessions, files, analytics—communicates exclusively through a single, universal interface called `IDatabaseAdapter`. No module ever writes raw SQL or calls MongoDB-specific methods directly. The adapter acts as a translator, converting these universal operations into engine-specific queries at runtime. This design pattern, known as the [Adapter Pattern](https://refactoring.guru/design-patterns/adapter), ensures that our code works identically on PostgreSQL, MySQL, MongoDB, SQLite, and more.
+
+### 3. Per-Tenant Isolation
+Each tenant (representing a different application or customer) gets its own isolated environment. This includes:
+- Its own database (or schema within a shared database).
+- Its own cryptographic secrets (JWT secret, bcrypt pepper), encrypted at rest.
+- Its own system tables (prefixed `_baas_` to avoid conflicts with business data).
+- Its own configurable rules for rate limits, CORS, and IP filtering.
+
+A token issued for Tenant A is cryptographically invalid for Tenant B. This ensures no cross-tenant data leakage by design, a fundamental aspect of [multi-tenancy](https://en.wikipedia.org/wiki/Multitenancy).
+
+### 4. Convention Over Configuration, Configuration Over Code
+mini-baas ships with sensible, secure defaults. Everything, from password policies to session timeouts, can be overridden per-tenant in the Master Document—without writing a single line of backend code.
+
+## High-Level Architecture
+
+mini-baas follows a strict three-plane architecture, a concept popularized by systems like [Kubernetes](https://kubernetes.io/docs/concepts/architecture/).
+
+| Plane | Responsibility | Storage |
+| :--- | :--- | :--- |
+| **Control Plane** | Manages the system itself. Handles tenant lifecycle (creation, suspension), stores and serves the "Master Document" (tenant schemas and config), and manages Identity and Access Management (IAM) policies. | MongoDB 7 (System DB) |
+| **Engine Layer** | The core translation layer. It provides database connection pooling and the universal `IDatabaseAdapter` interface, translating universal queries into engine-specific commands using tools like [Knex.js](https://knexjs.org/) and the [MongoDB Node.js Driver](https://www.mongodb.com/docs/drivers/node/current/). | N/A (Abstraction Layer) |
+| **Data Plane** | The runtime engine for all tenant requests. It hosts the Dynamic API, authentication, authorization, file handling, and all other functional modules. It uses the Engine Layer to interact with the tenant's own database. | Tenant's own database (any engine) |
+
+## The Polyglot Engine — How It Works
+
+The polyglot engine is the heart of mini-baas. It's a translation pipeline that allows every module to express database operations in a universal JSON format, which is then transpiled into engine-specific queries.
+
+### The Universal Adapter Interface
+Every database engine implements a single TypeScript interface—`IDatabaseAdapter`. This creates a consistent contract for all modules to follow.
+
+### The Universal Query IR (Intermediate Representation)
+For complex operations like filtering, sorting, and relations, mini-baas uses a Query Intermediate Representation. This is a JSON-based language that describes the *intent* of the query.
+
+**Example Query IR:**
+```json
+{
+  "entity": "orders",
+  "where": { "status": "pending", "total": { "$gt": 100 } },
+  "include": ["customer", "items.product"],
+  "orderBy": { "createdAt": "desc" },
+  "limit": 20
+}
+```
+
+This single IR gets transpiled by each adapter:
+- **SQL Adapter (Knex.js):** `SELECT ... FROM orders WHERE status = 'pending' AND total > 100 ...`
+- **MongoDB Adapter:** `db.orders.aggregate([ { $match: { status: "pending", total: { $gt: 100 } } }, ... ])`
+
+Same intent. Same result. Different engines. This is the essence of our [polyglot persistence](https://martinfowler.com/bliki/PolyglotPersistence.html) strategy.
+
+## The Master Document — A Tenant's DNA
+
+Every tenant is defined by a single **Master Document** stored in the Control Plane's MongoDB. This document is the complete blueprint for a tenant's backend—no code required. It defines everything: the database connection, the data schema, permissions, hooks, and security configurations. This approach is a form of [Infrastructure as Code](https://en.wikipedia.org/wiki/Infrastructure_as_code), but applied to the backend logic itself.
+
+**Why MongoDB for the Control Plane?**
+The Master Document is inherently a deeply nested, schema-variable JSON object. Using a [document database](https://en.wikipedia.org/wiki/Document-oriented_database) like MongoDB is the natural fit for this job. It allows us to store, query, and index this complex metadata with native tools, whereas a relational database would require awkward workarounds for the same task.
+
+## System Entity Model
+
+When a tenant is activated, mini-baas auto-provisions 16 system entities (like `_baas_users`, `_baas_sessions`, `_baas_audit_log`) in the tenant's own database. These are prefixed with `_baas_` to isolate them from the tenant's business data (their `orders`, `products`, etc.).
+
+## Module Inventory
+
+mini-baas ships with 14 universal modules. A key point is that **every module talks exclusively to the `IDatabaseAdapter`**, never directly to a specific database engine. This list includes:
+- **Auth Module:** Handles registration, login, JWT issuance, password resets.
+- **RBAC Module:** Manages roles and fine-grained permissions.
+- **GDPR Module:** Provides tools for consent management, data export, and the "right to be forgotten."
+- **Audit Module:** Automatically logs all mutations for a complete audit trail.
+- **File Module:** Manages file metadata in the database and binary storage on disk or S3.
+- **Webhook Module:** Allows tenants to register URLs that are called when specific events occur.
+
+*(For a full list, see the detailed document.)*
+
+## Security Architecture
+
+Security in mini-baas is **defense in depth**—multiple independent layers, each providing protection even if another fails.
+
+- **Encryption at Rest:** User passwords are hashed with **bcrypt + a unique, per-tenant pepper**. This pepper, along with other secrets like JWT keys, is itself encrypted using **AES-256-GCM** with a master key stored in the environment. This means that compromising the tenant's database is not enough to crack passwords; an attacker would also need the master key.
+- **JWT Isolation:** Each tenant signs its JWTs with its own unique, encrypted secret, making tokens from one tenant completely useless in another.
+- **Runtime Protection:** Global guards sanitize inputs to prevent injection attacks (NoSQL, SQL, XSS) and enforce per-tenant IP whitelisting/blacklisting and rate limiting.
+
+## Request Lifecycle
+
+Every request to the Data Plane follows a clear pipeline:
+1.  **Tenant Resolution:** The `TenantInterceptor` extracts the tenant ID from the URL, loads its Master Document (cached in Redis), and attaches it to the request context.
+2.  **Security & Authorization:** The request passes through security layers (IP filter, rate limiter, sanitization). If authenticated, the JWT is verified using the tenant's secret, and the `RolesGuard` or `PermissionsGuard` checks if the user has the right to perform the action.
+3.  **Dynamic API Execution:** The `DynamicController` receives the request. The `DynamicService` validates the request body against the tenant's schema (using [AJV](https://ajv.js.org/)), orchestrates the database operation via the `DatabaseProviderFactory`, and returns the result.
+
+## Technology Stack
+
+- **Runtime & Framework:** [Node.js 22 LTS](https://nodejs.org/), [NestJS 11](https://nestjs.com/), [TypeScript](https://www.typescriptlang.org/)
+- **Database Layer:** [Knex.js](https://knexjs.org/) (SQL), [MongoDB Node.js Driver](https://www.mongodb.com/docs/drivers/node/current/) (NoSQL), [Mongoose](https://mongoosejs.com/) (Control Plane), [Redis](https://redis.io/) (Cache)
+- **Security:** [bcrypt](https://github.com/kelektiv/node.bcrypt.js), Node.js `crypto` (AES-256-GCM), [CASL](https://casl.js.org/) (Authorization), [Helmet](https://helmetjs.github.io/)
+- **Infrastructure:** [Docker](https://www.docker.com/), [nodemailer](https://nodemailer.com/), [BullMQ](https://docs.bullmq.io/) (for future background jobs)
+
+## Implementation Phases
+
+The engine was built in logical phases, each verified with zero TypeScript compilation errors. The initial phases focused on the core foundation:
+- **Phase 0 & 1:** Established the Domain-Driven Design (DDD) structure and the Control Plane for managing tenants.
+- **Phase 2:** Created the heart of the system—the `IDatabaseAdapter` interface and its implementations for SQL and MongoDB.
+- **Phase 3 & 4:** Built the Dynamic API engine that reads the tenant's schema and the runtime validation system.
+- **Phase 5:** Integrated the ABAC (Attribute-Based Access Control) authorization engine using CASL.
+
+Subsequent phases added the functional modules (Auth, Sessions, RBAC, GDPR, etc.) and the final security hardening layer.
+
+*(For a full list of phases, see the detailed document.)*
+
+## Verification & Testing Strategy
+
+- **Compilation Verification:** Every phase was verified with `tsc --noEmit` to ensure zero type errors.
+- **Integration Test Scenarios:** We have a suite of tests that verify key behaviors, such as:
+    - **Polyglot Parity:** Running identical CRUD operations on PostgreSQL and MongoDB tenants yields the same results.
+    - **Auth Isolation:** Verifying that the same password results in different hashes for different tenants.
+    - **JWT Isolation:** Ensuring a token from Tenant A is rejected by Tenant B.
+    - **Security Checks:** Confirming that our sanitization guard blocks injection attacks.
+
+## Key Architectural Decisions
+
+1.  **Prisma Removed → Knex.js + Native Drivers:** Prisma relies on a static, generated schema. A BaaS needs to discover and work with schemas at runtime. Knex.js provides the necessary dynamic query-building capabilities across multiple SQL engines without a static generation step.
+2.  **Adapter Pattern + Universal Query IR:** This decision is what makes the system truly polyglot. By creating an intermediate representation for queries, we isolate all database-specific code within the adapters, making it easy to support new databases in the future.
+3.  **Per-Tenant Auth, Not Centralized:** Storing user and session data *within the tenant's own database* provides true data isolation and simplifies compliance with regulations like GDPR. It also makes it possible to offer auth on *any* database engine the tenant chooses.
+
+## Codebase Map
+
+The codebase is organized into clear, domain-driven directories: `common/` for shared utilities, `infrastructure/` for external service connections, `modules/` for all feature modules (split into `control-plane/`, `engines/`, and `data-plane/`), and `studio/` for the future admin UI. This structure makes the project maintainable and scalable as we add new features.
+
+## Future Roadmap
+
+The following phases are planned to extend mini-baas's capabilities:
+- **Phase 8: Hook Sandbox:** Execute user-defined JavaScript logic on lifecycle events (e.g., `beforeCreate`) within secure [V8 isolates](https://github.com/laverdet/isolated-vm).
+- **Phase 9: Background Jobs:** Implement a robust job queue with [BullMQ](https://docs.bullmq.io/) for reliable webhook delivery, email sending, and scheduled tasks.
+- **Phase 10: Billing & Usage Metering:** Add usage tracking and enforcement for building a commercial SaaS offering.
+- **Phase 11: First Tenant Migration:** Validate the entire platform by migrating a real-world application (Vite Gourmand) onto mini-baas.
+
 > **Current Status:** All core phases (0–7) complete. 87 TypeScript files. ~11,800 lines of code. `tsc --noEmit` = **zero errors**. Ready for integration testing and first tenant onboarding.
