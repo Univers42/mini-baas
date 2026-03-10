@@ -1,7 +1,29 @@
 # mini-baas Strategy - Unified Architecture, Database Rationale, and Execution Plan
 
-> This document is the canonical strategic synthesis of `BaaS.md`, `MDD_BAAS.md`, and `whymongo.md`.
+> This document is the canonical strategic synthesis of `BaaS.md`, `MDD_BAAS.md`, `whymongo.md`, and `dylan.md`.
 > It defines the product thesis, architecture decisions, risk posture, implementation stages, and measurable success criteria.
+
+## Table of Contents
+
+1. [Executive Summary](#1-executive-summary)
+2. [Product Thesis and Non-Negotiables](#2-product-thesis-and-non-negotiables)
+3. [Architectural Decision Framework](#3-architectural-decision-framework)
+4. [Plane Architecture and Responsibilities](#4-plane-architecture-and-responsibilities)
+5. [Master Document as the Runtime Contract](#5-master-document-as-the-runtime-contract)
+6. [Why MongoDB for the Control Plane](#6-why-mongodb-for-the-control-plane)
+7. [Multi-Tenant Isolation Model](#7-multi-tenant-isolation-model)
+8. [Authorization and Policy Enforcement](#8-authorization-and-policy-enforcement)
+9. [Query Abstraction and Adapter Strategy](#9-query-abstraction-and-adapter-strategy)
+10. [Universal Module Surface (from dylan.md)](#10-universal-module-surface-from-dylanmd)
+11. [Runtime Risk Register and Mitigations](#11-runtime-risk-register-and-mitigations)
+12. [Consistency and Guarantee Matrix](#12-consistency-and-guarantee-matrix)
+13. [Implementation Stages (Pragmatic Roadmap)](#13-implementation-stages-pragmatic-roadmap)
+14. [SLOs and Success Metrics](#14-slos-and-success-metrics)
+15. [Governance and Compliance Baseline](#15-governance-and-compliance-baseline)
+16. [Strategic Position for ft_transcendence](#16-strategic-position-for-ft_transcendence)
+17. [Final Synthesis](#17-final-synthesis)
+18. [Official Sources and References](#18-official-sources-and-references)
+19. [Source Documents](#19-source-documents)
 
 ---
 
@@ -16,8 +38,8 @@ The platform is designed around two planes:
 
 The strategic choice is:
 
-- MongoDB as the primary Control Plane store.
-- An adapter-based Data Plane for database agnosticism.
+- [MongoDB](https://www.mongodb.com/docs/) as the primary Control Plane store.
+- An adapter-based Data Plane for database agnosticism across [PostgreSQL](https://www.postgresql.org/docs/), [MySQL](https://dev.mysql.com/doc/), [MariaDB](https://mariadb.com/kb/en/documentation/), [SQLite](https://sqlite.org/docs.html), and MongoDB.
 - A phased execution strategy: Mongo-first MVP, SQL adapter hardening later.
 
 This combination maximizes delivery speed, preserves architectural optionality, and addresses ft_transcendence constraints around explicit schemas and relations.
@@ -39,6 +61,7 @@ The system must be able to host unbounded tenant diversity by interpreting tenan
 5. Runtime flexibility cannot bypass governance or security.
 6. Platform guarantees must not exceed the weakest active engine.
 7. Expensive work is asynchronous whenever possible (billing, aggregation, migrations).
+8. Convention over configuration, configuration over code: secure defaults are provided but tenant-level overrides are allowed.
 
 ---
 
@@ -47,14 +70,14 @@ The system must be able to host unbounded tenant diversity by interpreting tenan
 ### 3.1 Alternatives Evaluated
 
 1. Code generation + infra orchestration (Supabase-style).
-2. Serverless edge (Firebase/Cloudflare-style).
+2. Serverless edge ([Cloudflare Workers](https://developers.cloudflare.com/workers/) / [Firebase](https://firebase.google.com/docs)-style).
 3. Pure NoSQL runtime.
 4. Metadata-driven modular monolith (chosen).
 
 ### 3.2 Why Metadata-Driven Modular Monolith Wins Here
 
 - Lower operational overhead than large microservice fleets.
-- Better self-hosting story via Docker Compose.
+- Better self-hosting story via [Docker Compose](https://docs.docker.com/compose/).
 - Cleaner path to runtime adaptability than static code generation.
 - Stronger local control over hooks, policies, and data custody.
 
@@ -64,7 +87,13 @@ The chosen model increases runtime complexity (dynamic validation, policy inject
 
 ---
 
-## 4. Control Plane and Data Plane Responsibilities
+## 4. Plane Architecture and Responsibilities
+
+The architecture follows a three-plane model inspired by [Kubernetes control plane/data plane separation](https://kubernetes.io/docs/concepts/overview/components/):
+
+- Control Plane: governance and metadata authority.
+- Engine Plane: adapter factory, connection management, query translation.
+- Data Plane: request execution runtime.
 
 ### 4.1 Control Plane
 
@@ -88,7 +117,16 @@ Owns request execution:
 - Adapter-resolved execution per engine.
 - Optional hook execution in hardened isolates.
 
-### 4.3 Separation Rule
+### 4.3 Engine Plane
+
+Owns portability and translation:
+
+- Adapter factory and engine resolution.
+- Connection pooling.
+- Query intermediate representation (IR) to native engine query translation.
+- Cross-engine type normalization and capability mapping.
+
+### 4.4 Separation Rule
 
 Control Plane degradation should not instantly break Data Plane reads/writes for cached tenants. Data Plane must continue in degraded mode with bounded staleness.
 
@@ -109,6 +147,8 @@ The Master Document is not just configuration. It is executable governance metad
 - It controls what can be created/read/updated/deleted.
 - It controls where data is written.
 - It controls what code may run in hooks.
+
+A practical reference structure is aligned with the architecture implemented in NestJS modules and interfaces (for example, `IDatabaseDriver`) and follows [NestJS architecture guidance](https://docs.nestjs.com/).
 
 ---
 
@@ -132,6 +172,8 @@ Allow v1/v2/v3 tenant metadata to coexist with lazy migration.
 
 5. Schema validation:
 Reject malformed metadata at database boundary before runtime execution.
+
+Operationally, this uses MongoDB capabilities such as [JSON Schema validation](https://www.mongodb.com/docs/manual/core/schema-validation/) and indexed nested fields.
 
 ### 6.2 Consequence
 
@@ -192,21 +234,46 @@ Example of implicit enforcement:
 
 The runtime depends on `IDatabaseDriver`, not a concrete engine.
 
-### 9.2 Evolution Path
+This is the Adapter Pattern in practice and mirrors the intent of a universal data access layer; see [refactoring.guru Adapter Pattern](https://refactoring.guru/design-patterns/adapter).
+
+### 9.2 Query IR Model
+
+Dynamic API modules should express query intent through an internal IR (filters, sort, pagination, projection, relation hints), then adapters translate IR to native SQL or Mongo queries.
+
+This keeps business modules engine-agnostic and reduces feature drift across engines.
+
+### 9.3 Evolution Path
 
 1. Phase 1 (MVP): MongoAdapter as default execution engine.
 2. Phase 2: PostgresAdapter for strict relational workloads and evaluation requirements.
 3. Phase 3: intelligent routing/provisioning by schema shape and policy.
 
-### 9.3 Explicit Constraint
+### 9.4 Explicit Constraint
 
 No cross-engine joins are promised. The platform surface must express only guarantees that all supported engines can honor safely.
 
 ---
 
-## 10. Runtime Risk Register and Mitigations
+## 10. Universal Module Surface (from dylan.md)
 
-### 10.1 Dynamic Validation Hot Path
+The strategic module surface of `mini-baas` is not limited to CRUD. It includes reusable platform capabilities, each expected to remain adapter-driven:
+
+- Authentication and session management.
+- RBAC and policy-driven authorization.
+- Audit trail and compliance workflows (including GDPR operations).
+- File metadata/storage orchestration.
+- Notifications, newsletter, and communication primitives.
+- Analytics events and webhook delivery.
+- API key lifecycle and scoped access.
+- Security guardrails (rate limiting, sanitization, IP filtering, security headers).
+
+This module breadth is part of the product thesis: one reusable backend runtime for many frontend/business models.
+
+---
+
+## 11. Runtime Risk Register and Mitigations
+
+### 11.1 Dynamic Validation Hot Path
 
 Risk:
 Schema compilation on request path can saturate the event loop.
@@ -216,7 +283,7 @@ Mitigation:
 - Cache by `tenantId + schemaVersion + entity`.
 - Warm caches proactively on activation.
 
-### 10.2 Hook Sandbox Stability
+### 11.2 Hook Sandbox Stability
 
 Risk:
 Infinite loops, memory spikes, noisy-neighbor compute starvation.
@@ -227,7 +294,9 @@ Mitigation:
 - Network isolation by default.
 - Tenant-level hook rate limits.
 
-### 10.3 Control Plane Dependency
+Implementation guidance should align with [Node.js worker/isolation security practices](https://nodejs.org/api/vm.html) and strict process-level resource limits.
+
+### 11.3 Control Plane Dependency
 
 Risk:
 Metadata unavailability blocks requests.
@@ -237,19 +306,19 @@ Mitigation:
 - Stale-read fallback windows.
 - Background refresh and invalidation events.
 
-### 10.4 Billing in Request Cycle
+### 11.4 Billing in Request Cycle
 
 Risk:
 Synchronous metering inflates latency.
 
 Mitigation:
 - Emit usage events asynchronously.
-- Aggregate in background workers (BullMQ).
+- Aggregate in background workers ([BullMQ](https://docs.bullmq.io/)).
 - Serve dashboards from computed snapshots.
 
 ---
 
-## 11. Consistency and Guarantee Matrix
+## 12. Consistency and Guarantee Matrix
 
 The product contract must be explicit:
 
@@ -262,7 +331,7 @@ This prevents overpromising and aligns API semantics with real infrastructure ca
 
 ---
 
-## 12. Implementation Stages (Pragmatic Roadmap)
+## 13. Implementation Stages (Pragmatic Roadmap)
 
 ### Stage 1 - Tenant Context and Governance Foundation
 
@@ -304,9 +373,16 @@ This prevents overpromising and aligns API semantics with real infrastructure ca
 - Relational mode and ER-friendly outputs.
 - Dedicated tenant topology options.
 
+### Stage 8 - Verification and Hardening
+
+- Cross-engine parity tests for CRUD and policy behavior.
+- Tenant isolation tests (token, key, and data boundaries).
+- Security regression tests (injection payloads, rate abuse, hook limits).
+- SLO verification under load and cache miss/hit scenarios.
+
 ---
 
-## 13. SLOs and Success Metrics
+## 14. SLOs and Success Metrics
 
 Minimum measurable outcomes to validate strategy execution:
 
@@ -333,16 +409,18 @@ Rollback operation to previous metadata version <= 5 minutes operational procedu
 
 ---
 
-## 14. Governance and Compliance Baseline
+## 15. Governance and Compliance Baseline
 
-### 14.1 Required Technical Controls
+### 15.1 Required Technical Controls
 
 - Encryption in transit and at rest.
 - Tenant-scoped audit trails.
 - Immutable event logs for critical actions.
 - Secrets isolation and rotation policy.
 
-### 14.2 Operational Controls
+Use modern cryptographic guidance from [OWASP Cryptographic Storage Cheat Sheet](https://cheatsheetseries.owasp.org/cheatsheets/Cryptographic_Storage_Cheat_Sheet.html) and [NIST](https://csrc.nist.gov/publications).
+
+### 15.2 Operational Controls
 
 - Per-tenant quotas for entity count, payload size, request rate, hook resources.
 - Incident playbooks for tenant DB outage, Redis outage, hook abuse.
@@ -350,7 +428,7 @@ Rollback operation to previous metadata version <= 5 minutes operational procedu
 
 ---
 
-## 15. Strategic Position for ft_transcendence
+## 16. Strategic Position for ft_transcendence
 
 To satisfy strict evaluator expectations about schema clarity and relations while preserving App Factory flexibility:
 
@@ -363,7 +441,7 @@ This avoids false dichotomies between flexibility and formal relational rigor.
 
 ---
 
-## 16. Final Synthesis
+## 17. Final Synthesis
 
 The combined strategy is intentionally hybrid:
 
@@ -375,9 +453,40 @@ In practical terms, `mini-baas` succeeds if it can safely execute unknown tenant
 
 ---
 
-## 17. Source Documents
+## 18. Official Sources and References
+
+### 18.1 Core Technologies
+
+- NestJS docs: <https://docs.nestjs.com/>
+- Node.js docs: <https://nodejs.org/docs/latest/api/>
+- TypeScript handbook: <https://www.typescriptlang.org/docs/>
+- MongoDB docs: <https://www.mongodb.com/docs/>
+- PostgreSQL docs: <https://www.postgresql.org/docs/>
+- MySQL docs: <https://dev.mysql.com/doc/>
+- MariaDB docs: <https://mariadb.com/kb/en/documentation/>
+- SQLite docs: <https://sqlite.org/docs.html>
+- Redis docs: <https://redis.io/docs/latest/>
+- Docker docs: <https://docs.docker.com/>
+
+### 18.2 Security and Compliance
+
+- OWASP Cheat Sheet Series: <https://cheatsheetseries.owasp.org/>
+- OWASP ASVS: <https://owasp.org/www-project-application-security-verification-standard/>
+- JWT RFC 7519: <https://www.rfc-editor.org/rfc/rfc7519>
+- NIST Cybersecurity Resources: <https://csrc.nist.gov/>
+
+### 18.3 Architecture and Patterns
+
+- Kubernetes architecture concepts: <https://kubernetes.io/docs/concepts/overview/components/>
+- Adapter Pattern reference: <https://refactoring.guru/design-patterns/adapter>
+- Polyglot persistence (Martin Fowler): <https://martinfowler.com/bliki/PolyglotPersistence.html>
+
+---
+
+## 19. Source Documents
 
 - `docs/strategy/BaaS.md`
 - `docs/strategy/MDD_BAAS.md`
 - `docs/strategy/whymongo.md`
+- `docs/strategy/dylan.md`
 
