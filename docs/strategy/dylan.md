@@ -1,7 +1,7 @@
 # mini-baas — Strategic Architecture Document
 
 > **One Backend to Rule Them All.**
-> A metadata-driven, polyglot Backend-as-a-Service engine that lets any frontend — React, Vue, Angular, Flutter, Swift, Kotlin — run against a single NestJS instance, with any database engine, without writing a single backend route.
+> A metadata-driven, polyglot Backend-as-a-Service engine that lets any frontend — [React](https://react.dev/), [Vue](https://vuejs.org/), [Angular](https://angular.dev/), [Flutter](https://docs.flutter.dev/), [Swift](https://www.swift.org/documentation/), [Kotlin](https://kotlinlang.org/docs/home.html) — run against a single [NestJS](https://docs.nestjs.com/) instance, with any database engine, without writing a single backend route.
 
 ---
 
@@ -95,13 +95,13 @@
 ```
 ## Vision
 
-mini-baas is a **metadata-driven App Factory**. It is the same pattern used internally by Supabase, Hasura, and Appwrite — but fully open, self-hostable, and database-agnostic from day one.
+mini-baas is a **metadata-driven App Factory**. It is the same pattern used internally by [Supabase](https://supabase.com/), [Hasura](https://hasura.io/), and [Appwrite](https://appwrite.io/) — but fully open, self-hostable, and database-agnostic from day one.
 
 The idea is simple:
 
 - **You describe** your application's data model, permissions, and hooks in a JSON document (the *Master Document*).
 - **mini-baas generates** a full REST API, authentication system, file storage, webhooks, analytics, and more — at runtime, without code generation, without compilation, without deployment.
-- **Your frontend talks** to universal endpoints like `GET /api/:tenantId/orders` and mini-baas figures out whether those orders live in PostgreSQL, MongoDB, MySQL, or SQLite.
+- **Your frontend talks** to universal endpoints like `GET /api/:tenantId/orders` and mini-baas figures out whether those orders live in [PostgreSQL](https://www.postgresql.org/docs/), [MongoDB](https://www.mongodb.com/docs/), [MySQL](https://dev.mysql.com/doc/), or [SQLite](https://sqlite.org/docs.html).
 
 One backend. Any frontend. Any database. Any business model.
 
@@ -210,7 +210,7 @@ Everything is overridable per-tenant in the Master Document — without writing 
 
 ## High-Level Architecture
 
-mini-baas follows a strict **three-plane architecture** inspired by Kubernetes' control plane / data plane separation:
+mini-baas follows a strict **three-plane architecture** inspired by [Kubernetes](https://kubernetes.io/docs/concepts/overview/components/) control plane / data plane separation:
 
 ```mermaid
 graph TB
@@ -288,8 +288,8 @@ graph TB
 
 | Plane | Responsibility | Storage |
 |---|---|---|
-| **Control Plane** | Tenant lifecycle, schema management, provisioning, IAM policies | MongoDB 7 (system DB) |
-| **Engine Layer** | Database abstraction, connection pooling, query translation | Knex.js + MongoDB native |
+| **Control Plane** | Tenant lifecycle, schema management, provisioning, IAM policies | [MongoDB 7](https://www.mongodb.com/docs/) (system DB) |
+| **Engine Layer** | Database abstraction, connection pooling, query translation | [Knex.js](https://knexjs.org/) + [MongoDB Node Driver](https://www.mongodb.com/docs/drivers/node/current/) |
 | **Data Plane** | Dynamic API, validation, auth, sessions, all modules | Tenant's own database (any engine) |
 
 ---
@@ -330,7 +330,7 @@ sequenceDiagram
 
 ### The Universal Adapter Interface
 
-Every database engine implements a single TypeScript interface — `IDatabaseAdapter`:
+Every database engine implements a single [TypeScript](https://www.typescriptlang.org/docs/) interface — `IDatabaseAdapter`:
 
 ```typescript
 interface IDatabaseAdapter {
@@ -879,6 +879,8 @@ Admin endpoints for querying audit trail by date range, user, entity, or action.
 
 Security in mini-baas is **defense in depth** — multiple independent layers, each providing protection even if another fails.
 
+Reference baselines: [OWASP Cheat Sheet Series](https://cheatsheetseries.owasp.org/), [OWASP ASVS](https://owasp.org/www-project-application-security-verification-standard/), and [NIST CSRC](https://csrc.nist.gov/).
+
 ```mermaid
 graph TD
     REQ[Incoming Request] --> HELMET[Helmet<br/>Security Headers]
@@ -1034,40 +1036,40 @@ flowchart TD
 
 | Component | Technology | Version | Purpose |
 |---|---|---|---|
-| Runtime | Node.js | 22 LTS | JavaScript/TypeScript runtime |
-| Framework | NestJS | 11 | DDD-oriented, modular backend framework |
-| Language | TypeScript | 5.x | Static typing, interfaces, decorators |
+| Runtime | [Node.js](https://nodejs.org/docs/latest/api/) | 22 LTS | JavaScript/TypeScript runtime |
+| Framework | [NestJS](https://docs.nestjs.com/) | 11 | DDD-oriented, modular backend framework |
+| Language | [TypeScript](https://www.typescriptlang.org/docs/) | 5.x | Static typing, interfaces, decorators |
 
 ### Database Layer
 
 | Component | Technology | Purpose |
 |---|---|---|
-| SQL Adapter | Knex.js 3 | Query builder for PostgreSQL, MySQL, MariaDB, SQLite, MSSQL |
-| NoSQL Adapter | MongoDB Native Driver 6 | Direct access for MongoDB tenants |
-| Control Plane DB | Mongoose 8 + MongoDB 7 | Master Document storage |
-| Cache | ioredis + Redis 7 | Tenant metadata caching, rate limit state |
+| SQL Adapter | [Knex.js](https://knexjs.org/) 3 | Query builder for PostgreSQL, MySQL, MariaDB, SQLite, MSSQL |
+| NoSQL Adapter | [MongoDB Node Driver](https://www.mongodb.com/docs/drivers/node/current/) 6 | Direct access for MongoDB tenants |
+| Control Plane DB | [Mongoose](https://mongoosejs.com/docs/) 8 + [MongoDB](https://www.mongodb.com/docs/) 7 | Master Document storage |
+| Cache | [ioredis](https://github.com/redis/ioredis) + [Redis](https://redis.io/docs/latest/) 7 | Tenant metadata caching, rate limit state |
 
 ### Security
 
 | Component | Technology | Purpose |
 |---|---|---|
-| Password Hashing | bcrypt 6 | 12-round salted hashing |
-| Encryption | Node.js `crypto` (AES-256-GCM) | Per-tenant secret encryption |
-| JWT | @nestjs/jwt 11 | Per-tenant token signing/verification |
-| Authorization | CASL 6 | Attribute-based access control (ABAC) |
-| Validation | AJV 8 | Runtime JSON Schema validation |
-| HTTP Security | Helmet 8 | Security headers (CSP, HSTS, etc.) |
+| Password Hashing | [bcrypt](https://github.com/kelektiv/node.bcrypt.js) 6 | 12-round salted hashing |
+| Encryption | [Node.js `crypto`](https://nodejs.org/api/crypto.html) (AES-256-GCM) | Per-tenant secret encryption |
+| JWT | [@nestjs/jwt](https://github.com/nestjs/jwt) 11 | Per-tenant token signing/verification |
+| Authorization | [CASL](https://casl.js.org/) 6 | Attribute-based access control (ABAC) |
+| Validation | [AJV](https://ajv.js.org/) 8 | Runtime JSON Schema validation |
+| HTTP Security | [Helmet](https://helmetjs.github.io/) 8 | Security headers (CSP, HSTS, etc.) |
 
 ### Infrastructure
 
 | Component | Technology | Purpose |
 |---|---|---|
-| Containerization | Docker + Docker Compose | Development & deployment |
-| Email | nodemailer 8 | Per-tenant SMTP |
-| Task Scheduling | @nestjs/schedule | Periodic cleanup jobs |
-| Event Bus | @nestjs/event-emitter | Internal event-driven communication |
-| Rate Limiting | @nestjs/throttler + custom guard | Global + per-tenant rate limits |
-| API Docs | Swagger / OpenAPI | Auto-generated API documentation |
+| Containerization | [Docker](https://docs.docker.com/) + [Docker Compose](https://docs.docker.com/compose/) | Development & deployment |
+| Email | [nodemailer](https://nodemailer.com/) 8 | Per-tenant SMTP |
+| Task Scheduling | [@nestjs/schedule](https://docs.nestjs.com/techniques/task-scheduling) | Periodic cleanup jobs |
+| Event Bus | [@nestjs/event-emitter](https://github.com/nestjs/event-emitter) | Internal event-driven communication |
+| Rate Limiting | [@nestjs/throttler](https://docs.nestjs.com/security/rate-limiting) + custom guard | Global + per-tenant rate limits |
+| API Docs | [Swagger](https://swagger.io/specification/) / [OpenAPI](https://www.openapis.org/) | Auto-generated API documentation |
 
 ### Development Stack Containers
 
@@ -1256,7 +1258,7 @@ npx nest build     # Clean build required
 
 **Problem:** Prisma requires static schemas at build time (code generation, migrations). A BaaS discovers schemas at *runtime*.
 
-**Decision:** Replace with Knex.js (SQL query builder covering 5 engines) + MongoDB native driver. Knex provides the same type-safe query building without requiring a schema file. MongoDB driver provides direct collection access.
+**Decision:** Replace with [Knex.js](https://knexjs.org/) (SQL query builder covering 5 engines) + [MongoDB Node Driver](https://www.mongodb.com/docs/drivers/node/current/). Knex provides the same type-safe query building without requiring a schema file. MongoDB driver provides direct collection access.
 
 **Result:** Single `IDatabaseAdapter` interface covers all 6 database engines. New engines can be added by implementing the interface.
 
@@ -1543,7 +1545,7 @@ Execute user-defined JavaScript hooks in secure V8 isolates using `isolated-vm`:
 
 ### Phase 9: Background Jobs
 
-Async task queue using BullMQ + Redis:
+Async task queue using [BullMQ](https://docs.bullmq.io/) + [Redis](https://redis.io/docs/latest/):
 - Webhook delivery retries with exponential backoff
 - Email sending queue
 - Schema introspection jobs
