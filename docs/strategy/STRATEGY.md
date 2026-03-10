@@ -3,6 +3,30 @@
 > This document is the canonical strategic synthesis of `BaaS.md`, `MDD_BAAS.md`, `whymongo.md`, and `dylan.md`.
 > It defines the product thesis, architecture decisions, risk posture, implementation stages, and measurable success criteria.
 
+# todo: [ ] añadir un preaumbulo para convencer al lector
+# todo: [ ] añadir todos los diagramas que se han hecho con sentido y en orden
+# todo: [ ] añadir toda la información posible para que todos sepamos cuál es la estrategia. esta debe ser de manera gradual para que podamos entender todos (tanto de dentro como de fuera del proyecto)
+# todo: [ ] añadir clases para añadir colores para los diagramas (los que hay ahora pueden no ayudar al lector)
+# todo: [ ] formato vertical será mejor que el horizontal para leer los diagramas
+# todo: [ ] desarrollar más el concepto en vez de soltarlos así como si nada, y añadir transciones entre temas
+---
+---
+---
+---
+---
+---
+---
+---
+# todo: ***TODAS LAS INFORMACIONES***
+---
+---
+---
+---
+---
+---
+---
+---
+
 ## Table of Contents
 
 1. [Executive Summary](#1-executive-summary)
@@ -14,7 +38,7 @@
 7. [Multi-Tenant Isolation Model](#7-multi-tenant-isolation-model)
 8. [Authorization and Policy Enforcement](#8-authorization-and-policy-enforcement)
 9. [Query Abstraction and Adapter Strategy](#9-query-abstraction-and-adapter-strategy)
-10. [Universal Module Surface (from dylan.md)](#10-universal-module-surface-from-dylanmd)
+10. [Universal Module Surface](#10-universal-module-surface-from-dylanmd)
 11. [Runtime Risk Register and Mitigations](#11-runtime-risk-register-and-mitigations)
 12. [Consistency and Guarantee Matrix](#12-consistency-and-guarantee-matrix)
 13. [Implementation Stages (Pragmatic Roadmap)](#13-implementation-stages-pragmatic-roadmap)
@@ -254,7 +278,7 @@ No cross-engine joins are promised. The platform surface must express only guara
 
 ---
 
-## 10. Universal Module Surface (from dylan.md)
+## 10. Universal Module Surface
 
 The strategic module surface of `mini-baas` is not limited to CRUD. It includes reusable platform capabilities, each expected to remain adapter-driven:
 
