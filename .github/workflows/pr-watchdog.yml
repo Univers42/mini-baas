@@ -22,7 +22,7 @@ permissions:
   issues: write
 
 env:
-  TEAM_MENTIONS: "@LESdylan @login2 @login3 @login4 @login5"
+  TEAM_MENTIONS: "@LESdylan @danfern3 @serjimen @vjan-nie"
   THRESHOLD_HOURS: "8"
 
 jobs:
