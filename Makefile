@@ -21,7 +21,7 @@ export DOCKER_BUILDKIT := 0
 export COMPOSE_DOCKER_CLI_BUILD := 0
 endif
 .PHONY: help
-.DEFAULT_GOAL := all
+.DEFAULT_GOAL := help
 
 # ── Compose auto-detection ───────────────────────────
 COMPOSE_CMD := $(shell \
@@ -74,14 +74,11 @@ endef
 check-docker:
 	@command -v docker >/dev/null 2>&1 || { echo -e "$(RED)✗ Docker Engine not found$(NC)"; exit 1; }
 	@docker info >/dev/null 2>&1 || { echo -e "$(RED)✗ Docker daemon is not running$(NC)"; exit 1; }
-	$(call step,$(GREEN)✓,Docker Engine is running)
 
 check-compose:
 ifeq ($(COMPOSE_CMD),__NONE__)
 	@echo -e "$(RED)✗ No Docker Compose tool found$(NC)"
 	@exit 1
-else
-	$(call step,$(GREEN)✓,Compose tool: $(BOLD)$(COMPOSE_CMD)$(NC))
 endif
 
 check-env:
@@ -93,8 +90,6 @@ check-env:
 			echo -e "$(RED)✗ .env file is missing in $(BACKEND)/$(NC)"; \
 			exit 1; \
 		fi; \
-	else \
-		echo -e "  $(GREEN)✓$(NC)  .env file loaded"; \
 	fi
 
 check-ports:
@@ -107,8 +102,6 @@ check-ports:
 	done; \
 	if [ -n "$$BLOCKED" ]; then \
 		echo -e "  $(YELLOW)⚠$(NC)  Ports in use:$(BOLD)$$BLOCKED$(NC) (run 'make kill-ports')"; \
-	else \
-		echo -e "  $(GREEN)✓$(NC)  All ports available"; \
 	fi
 
 preflight: check-docker check-compose check-env check-ports
@@ -120,12 +113,12 @@ preflight: check-docker check-compose check-env check-ports
 
 .PHONY: all bootstrap banner
 
-all: banner preflight bootstrap dev
+all: banner preflight bootstrap dev ## 🚀 Full setup (preflight, bootstrap, start dev server)
 
 banner:
 	$(BANNER)
 
-bootstrap: docker-up install typecheck
+bootstrap: docker-up install typecheck ## ⚡ Initial setup (install deps & typecheck)
 	@echo ""
 	@echo -e "$(GREEN)╔══════════════════════════════════════════════════════════╗$(NC)"
 	@echo -e "$(GREEN)║$(NC)  ✅  $(BOLD)Engine setup complete!$(NC)                            $(GREEN)║$(NC)"
@@ -141,18 +134,18 @@ bootstrap: docker-up install typecheck
 
 .PHONY: docker-up docker-down docker-logs docker-clean
 
-docker-up: check-compose
+docker-up: check-compose ## 🐳 Start all containers in background
 	$(call step,$(BLUE)ℹ,Starting Engine containers...)
 	@$(COMPOSE_DEV) up -d --build
 
-docker-down: check-compose
+docker-down: check-compose ## 🛑 Stop all containers
 	$(call step,$(YELLOW)⚠,Stopping Engine...)
 	@$(COMPOSE_DEV) down
 
-docker-logs: check-compose
+docker-logs: check-compose ## 📋 Tail container logs
 	@$(COMPOSE_DEV) logs -f
 
-docker-clean: check-compose
+docker-clean: check-compose ## 🧹 Remove containers and volumes (Warning: destroys data)
 	@echo -e "$(RED)⚠  This will delete all databases and node_modules$(NC)"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	@$(COMPOSE_DEV) down -v --remove-orphans
@@ -165,15 +158,15 @@ docker-clean: check-compose
 
 .PHONY: install dev shell
 
-install:
+install: ## 📦 Install Node.js dependencies inside container
 	$(call step,$(BLUE)ℹ,Installing BaaS dependencies...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm install"
 
-dev: docker-up
+dev: docker-up ## 🔥 Start hot-reload development server
 	$(call step,$(BLUE)ℹ,Starting hot-reload engine...)
 	@docker exec -it $(CONTAINER) sh -c "cd /app && pnpm run start:dev"
 
-shell:
+shell: ## 🐚 Open interactive bash shell inside dev container
 	@docker exec -it $(CONTAINER) bash
 
 # ============================================
@@ -182,15 +175,15 @@ shell:
 
 .PHONY: lint format typecheck
 
-lint:
+lint: ## 🔍 Run ESLint on the codebase
 	$(call step,$(BLUE)ℹ,Running ESLint...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm exec eslint . 2>/dev/null || true"
 
-format:
+format: ## ✨ Run Prettier to format code
 	$(call step,$(BLUE)ℹ,Running Prettier...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm exec prettier --write 'src/**/*.ts'"
 
-typecheck:
+typecheck: ## 🏗️ Run TypeScript compiler check (no output)
 	$(call step,$(BLUE)ℹ,Verifying Phase 0 Structure (tsc --noEmit)...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm exec tsc --noEmit"
 	$(call step,$(GREEN)✓,Phase 0 compilation passed!)
@@ -201,7 +194,7 @@ typecheck:
 
 .PHONY: kill-ports
 
-kill-ports:
+kill-ports: ## 🔌 Free up ports used by the project
 	$(call step,$(YELLOW)⚠,Freeing ports...)
 	@$(COMPOSE_DEV) down 2>/dev/null || true
 	@for p in 3000 27017 5432 6379 8025; do \
@@ -221,3 +214,21 @@ doctor: ## 🩺 Run environment diagnostics
 
 audit: ## 🛡️ Run all security & quality checks
 	@bash scripts/diagnostic/run.sh all
+
+test-postman: ## 📮 Run Postman CLI tests
+	@bash scripts/test/postman-cli.sh help
+
+seed-system: ## 🧠 Inject test Master Document into MongoDB
+	@bash scripts/db/seed-control-plane.sh
+
+reset-db: ## 💥 Destroy all data volumes (Mongo, Postgres, Redis)
+	@bash scripts/db/reset.sh
+
+# ============================================
+#  ❓ HELP
+# ============================================
+
+help: ## ❓ Show this help message
+	@echo -e "$(BOLD)mini-baas — Available Commands$(NC)"
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
