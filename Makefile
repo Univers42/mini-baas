@@ -36,18 +36,10 @@ COMPOSE_CMD := $(shell \
 	fi \
 )
 
-COMPOSE_VERSION := $(shell \
-	if docker compose version --short 2>/dev/null; then true; \
-	elif docker-compose version --short 2>/dev/null; then true; \
-	elif podman-compose version 2>/dev/null | grep -oP '[\d]+\.[\d]+' | head -1; then true; \
-	else echo 'unknown'; \
-	fi \
-)
-
 # ── Variables ────────────────────────────────────────
 COMPOSE_DEV  := $(COMPOSE_CMD) -f docker-compose.dev.yml
-CONTAINER    := baas-dev-engine # Updated container name
-BACKEND      := backend         # Updated to the new clean folder
+CONTAINER    := baas-dev-engine
+BACKEND      := backend
 
 # Colors
 BLUE    := \033[0;34m
@@ -106,7 +98,7 @@ check-env:
 	fi
 
 check-ports:
-	@PORTS="3000 27017 5432 6379"; \
+	@PORTS="3000 27017 5432 6379 8025"; \
 	BLOCKED=""; \
 	for p in $$PORTS; do \
 		if ss -tlnp 2>/dev/null | grep -q ":$$p "; then \
@@ -212,17 +204,20 @@ typecheck:
 kill-ports:
 	$(call step,$(YELLOW)⚠,Freeing ports...)
 	@$(COMPOSE_DEV) down 2>/dev/null || true
-	@for p in 3000 27017 5432 6379; do \
-		PIDS=$$(lsof -t -i :$$p 2>/dev/null); \
+	@for p in 3000 27017 5432 6379 8025; do \
+		PIDS=$$(lsof -t -i :$$p 2>/dev/null || true); \
 		if [ -n "$$PIDS" ]; then kill -9 $$PIDS 2>/dev/null || sudo kill -9 $$PIDS 2>/dev/null || true; fi; \
 	done
 	$(call step,$(GREEN)✓,Ports freed)
 
 # ============================================
-#  ❓ HELP
+#  🩺 DIAGNOSTICS & SCRIPTS
 # ============================================
 
-help:
-	@echo -e "$(BOLD)mini-baas — Available Commands$(NC)"
-	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+.PHONY: doctor audit test-postman seed-system reset-db
+
+doctor: ## 🩺 Run environment diagnostics
+	@bash scripts/utils/doctor.sh
+
+audit: ## 🛡️ Run all security & quality checks
+	@bash scripts/diagnostic/run.sh all

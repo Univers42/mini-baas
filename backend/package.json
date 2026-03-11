@@ -10,7 +10,9 @@
     "start:dev": "nest start --watch",
     "start:prod": "node dist/main",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\"",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "jest --passWithNoTests",
+    "test:e2e": "jest --config ./test/jest-e2e.json --passWithNoTests"
   },
   "dependencies": {
     "@casl/ability": "^6.5.0",
