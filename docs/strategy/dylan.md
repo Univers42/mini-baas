@@ -7,6 +7,7 @@
 
 ## Table of Contents
 
+0. [Preamble](#preamble)
 1. [Vision](#vision)
 2. [Why mini-baas Exists](#why-mini-baas-exists)
 3. [Core Principles](#core-principles)
@@ -22,10 +23,35 @@
 13. [Verification & Testing Strategy](#verification--testing-strategy)
 14. [Key Architectural Decisions](#key-architectural-decisions)
 15. [Codebase Map](#codebase-map)
+16. [Future Roadmap](#future-roadmap-1)
 
 ---
 
-## layer Architecture
+## Preamble
+
+Every time a developer starts a new project, they face the same invisible tax: authentication, authorization, validation, CRUD scaffolding, audit logging, multi-tenancy, rate limiting — all re-implemented from scratch or assembled from loosely integrated libraries. This is not accidental complexity. It is structural waste.
+
+`mini-baas` exists to eliminate that tax.
+
+The premise is simple but powerful: **if the behavior of a backend can be described in metadata, it can be generated at runtime without a single line of custom server code per tenant.** The tenant defines what data exists, what transformations apply, and what rules govern access — the platform interprets those definitions and executes accordingly. The same runtime serves a restaurant ordering system, a logistics tracker, and a social platform, without a single deployment per tenant.
+
+This is not a new idea. Firebase, Supabase, and Hasura have all explored fragments of it. What `mini-baas` does differently is commit to the full contract: a metadata-driven, adapter-agnostic, self-hostable App Factory where tenant schemas, policies, hooks, and billing live as first-class runtime objects — not as code checked into a repository.
+
+This document is the canonical blueprint for how `mini-baas` works and why every major architectural decision was made. It is not a product one-pager. It is an engineering manifesto:
+
+- **Architects** will find the rationale for plane separation, database selection, and isolation models.
+- **Developers** will find the interface contracts, adaptation strategies, and phased implementation plan.
+- **Evaluators and academic reviewers** will find explicit tradeoff analysis, consistency guarantees, formal relational support, and measurable success criteria.
+
+The strategy is deliberate and staged. It does not promise everything at once. It promises a clear path from a working MongoDB MVP to a multi-engine, multi-tenant platform with formal relational support — each phase building on the last, each decision made to preserve optionality for what comes next.
+
+If you question whether a metadata-driven approach can satisfy strict academic schema and relation requirements, [Section 9](#9-query-abstraction-and-adapter-strategy) and [Section 16](#16-strategic-position-for-ft_transcendence) address it directly. If you wonder how real isolation works in shared infrastructure, [Sections 7](#7-multi-tenant-isolation-model) and [8](#8-authorization-and-policy-enforcement) go deep. If you want to understand what "done" looks like in measurable terms, [Section 14](#14-slos-and-success-metrics) defines it precisely.
+
+Read this document once to understand the vision. Read it again before any significant architectural decision.
+
+---
+
+## Layer Architecture
 
 ```bash
 .
@@ -137,6 +163,14 @@ graph LR
     F --> I
     F --> J
     F --> K
+
+    classDef frontend fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
+    classDef engine fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
+    classDef database fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+
+    class A,B,C,D,E frontend;
+    class F engine;
+    class G,H,I,J,K database;
 ```
 
 ---
@@ -192,8 +226,37 @@ Each tenant gets:
 - **Its own bcrypt pepper** (also encrypted)
 - **Its own system entities** (prefixed `_baas_` to isolate from business data)
 - **Its own rate limits, CORS origins, IP whitelist/blacklist**
+- **Its own Redis cache**
 
 A token issued for Tenant A is cryptographically invalid for Tenant B. There is no cross-tenant data leakage by design.
+
+```mermaid
+graph TD
+    Req[Incoming Request] --> Interceptor[Tenant Interceptor]
+    Interceptor --> |"tenant_id: ws_123"| Cache[(Redis Namespace: <br/> tenant:ws_123)]
+    
+    Cache --> Runtime[Data Plane Runtime]
+    
+    subgraph Compute Isolation
+        Runtime --> V8[isolated-vm Sandbox <br/> Strict CPU/RAM limits]
+    end
+    
+    subgraph Data Isolation
+        Runtime --> DB1[(Shared MongoDB <br/> Tenant Scoped Collections)]
+        Runtime --> DB2[(Dedicated PostgreSQL <br/> Enterprise Tenant)]
+    end
+
+	classDef incomingRequest fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
+    classDef engine fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
+    classDef database fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+    classDef databaseIsolated fill:#AFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+
+    class Req incomingRequest;
+    class Interceptor,V8,Runtime engine;
+    class Cache database;
+	class DB1,DB2 databaseIsolated;
+```
+
 
 ### 4. Convention Over Configuration, Configuration Over Code
 
@@ -1146,6 +1209,67 @@ gantt
 - `UniversalSchemaMap`, `EntityDefinition`, `FieldDefinition` type system
 - `QueryIR` — universal query intermediate representation
 
+	Even though we only use MongoDB initially, we strictly enforce the `IDatabaseDriver` interface. The system *believes* it is using an agnostic adapter. 
+
+```mermaid
+classDiagram
+    class DynamicService {
+        +executeAST(query: ASTQuery)
+    }
+    class IDatabaseDriver {
+        <<interface>>
+        +execute(query: ASTQuery)
+		-translate()
+    }
+    class MongoAdapter {
+        +execute(query: ASTQuery)
+        -translate()
+    }
+    class PostgresAdapter {
+        +execute(query: ASTQuery)
+        -translate()
+    }
+    DynamicService --> IDatabaseDriver : depends on
+    IDatabaseDriver <|-- MongoAdapter : implements
+    IDatabaseDriver <|-- PostgresAdapter : implements
+```
+
+#### **The adapter in action**
+```mermaid
+sequenceDiagram
+  participant T as Tenant
+  participant API as NestJS (API)
+  participant Config as Metadata (Redis/Mongo)
+  participant Adapt as IDatabaseDriver
+  participant DB as Tenant Database
+  participant H as Hooks (V8)
+
+  T->>API: POST /api/ws_123/books
+  activate API
+
+  Note over API: 1. Context & Validation
+  API->>Config: Get schema & DB config
+  Config-->>API: Master Document
+  API->>API: Validate payload (Zod)
+
+  Note over API, Adapt: 2. Adapter Pattern
+  API->>Adapt: execute({ action: 'create', ... })
+  
+  Note over Adapt, DB: 3. Execution (Mongo or PG)
+  Adapt->>DB: Native Insert (insertOne / INSERT)
+  DB-->>Adapt: Register created
+  Adapt-->>API: Normalized Result
+
+  opt Defined Hook (ej. afterCreate)
+    Note over API: 4. Extensibility
+    API->>H: Execute JS in isolated-vm
+    H-->>API: Processed result
+  end
+
+  API-->>T: 200 OK + JSON
+  deactivate API
+```
+
 ### Phase 3: Dynamic API Engine
 
 - `TenantInterceptor` — extracts tenant from URL, loads Master Document (Redis cache → MongoDB fallback), attaches to request context
@@ -1558,6 +1682,87 @@ Async task queue using [BullMQ](https://docs.bullmq.io/) + [Redis](https://redis
 - Tier enforcement (request limits, storage limits, entity count limits)
 - Schema versioning endpoints: `GET /_schema/versions`, `POST /_schema/rollback/:version`
 
+
+#### ***Pattern Diagram***
+
+The Computed Pattern **pre-calculates values** that would otherwise require expensive aggregations on every read. The cost of computation is paid **once at write time**; all subsequent reads are instantaneous.
+
+> Core principle: *"Pay the cost once when writing, rather than paying it every time when reading."*
+
+
+```mermaid
+sequenceDiagram
+    participant Dashboard as 🖥️ Tenant Dashboard
+    participant DataPlane as ⚙️ Data Plane (NestJS)
+    participant MongoDB as 🍃 MongoDB (Control Plane)
+    participant BullMQ as 📬 BullMQ (Queue)
+    participant Aggregator as 🧮 BillingAggregator
+
+    Note over Dashboard,Aggregator: ❌ WITHOUT Computed Pattern — every read aggregates millions of events
+    Dashboard->>DataPlane: GET /billing/summary
+    DataPlane->>MongoDB: aggregate(usageEvents) ← slow, expensive
+    MongoDB-->>DataPlane: result after scanning millions of docs
+    DataPlane-->>Dashboard: response in ~2000ms ⚠️
+
+    Note over Dashboard,Aggregator: ✅ WITH Computed Pattern — instant read
+    BullMQ->>Aggregator: hourly job (background)
+    Aggregator->>MongoDB: aggregate(usageEvents) ← costly, but only 1×/hour
+    Aggregator->>MongoDB: updateOne({ billing.computed }) ← stores result
+    Dashboard->>DataPlane: GET /billing/summary
+    DataPlane->>MongoDB: findOne({ tenantId }, { billing.computed }) ← O(1)
+    MongoDB-->>DataPlane: pre-calculated field
+    DataPlane-->>Dashboard: response in ~15ms ✅
+```
+
+> **Reading this diagram:** The top half shows the naive approach — each dashboard request triggers a full aggregation scan of potentially millions of `UsageEvents`. The bottom half shows how the Computed Pattern inverts this: the expensive aggregation runs once per hour in the background (via BullMQ), and the result is stored directly inside the `TenantMetadata` document. Dashboard reads become a simple `findOne`, dropping response time from ~2000ms to ~15ms regardless of how much historical data exists.
+
+---
+
+The Approximation Pattern accepts statistically valid values instead of exact figures for **high-volume, low-criticality metrics**, reducing write operations by up to 99% and freeing up resources for truly critical operations.
+
+> *"Good enough is often good enough."*
+
+```mermaid
+graph TD
+    subgraph Requests["⚡ 10,000 requests/minute (active tenant)"]
+        R1[Request 1]
+        R2[Request 2]
+        RN[Request N...]
+    end
+
+    subgraph Without["❌ Without Approximation"]
+        W1[(MongoDB
+		10,000 writes/min)]
+    end
+
+    subgraph With["✅ With Approximation"]
+        Redis["Redis
+		in-memory buffer"]
+        Threshold{"Threshold
+		reached?
+		(1,000 requests)"}
+        W2[(MongoDB
+		10 writes/min)]
+    end
+
+    R1 --> Without
+    R2 --> Without
+    RN --> Without
+
+    R1 --> Redis
+    R2 --> Redis
+    RN --> Redis
+    Redis --> Threshold
+    Threshold -->|"Yes → flush
+	(1 write = 1,000 requests)"| W2
+    Threshold -->|No → accumulate| Redis
+
+    style Without fill:#ffebee,stroke:#c62828,stroke-width:2px,color:#000
+    style With fill:#e8f5e9,stroke:#1b5e20,stroke-width:2px,color:#000
+```
+
+> **Reading this diagram:** Both sides receive the same 10,000 requests per minute. Without the pattern, every single request triggers a MongoDB write — the database becomes the bottleneck. With the pattern, each request increments a counter in Redis (an in-memory operation, essentially free). Only when that counter crosses the threshold of 1,000 does a single write go to MongoDB. The result is a 99.9% reduction in write operations, with the counter in MongoDB staying statistically accurate for all practical purposes (trend analysis, dashboards, reporting).
+
 ### Phase 11: First Tenant — Vite Gourmand Migration
 
 Validate the entire BaaS with a real application:
@@ -1760,6 +1965,35 @@ Subsequent phases added the functional modules (Auth, Sessions, RBAC, GDPR, etc.
 ## Codebase Map
 
 The codebase is organized into clear, domain-driven directories: `common/` for shared utilities, `infrastructure/` for external service connections, `modules/` for all feature modules (split into `control-plane/`, `engines/`, and `data-plane/`), and `studio/` for the future admin UI. This structure makes the project maintainable and scalable as we add new features.
+
+### Scalability & Evolution
+
+* **Dynamic CORS & WAF:** Rules are stored in the Control Plane's Master Document and applied per request.
+* **Tenant-Scoped Metrics:** Tracking the **95th percentile (p95)** latency per tenant prevents one bad query from triggering global alarms.
+* **Schema Evolution & Metadata Versioning:** Schema changes are instantaneous and reversible. Adding a column generates a new Master Document with `version: 2`. Rollbacks are just a pointer flip in the Control Plane.
+* **Usage Metering (Event-Driven):** Calculating bills inside the API destroys performance. The Data Plane pushes events asynchronously to a queue (BullMQ), enabling the Control Plane to process billing without impacting request latency.
+
+```mermaid
+sequenceDiagram
+    participant Client
+    participant DP as Data Plane (NestJS)
+    participant Q as BullMQ (Redis)
+    participant CP as Control Plane (Billing)
+
+    Client->>DP: GET /api/ws_123/books
+    activate DP
+    DP->>DP: Execute Query (15ms)
+    DP-->>Client: 200 OK (Data)
+    DP-)Q: Emit Event {type: 'read', tenant: 'ws_123'}
+    deactivate DP
+    
+    Note over Q,CP: Asynchronous Background Process
+    Q-->>CP: Consume Event
+    activate CP
+    CP->>CP: Update Tenant Usage Metrics
+    CP->>CP: Check Tier Limits
+    deactivate CP
+```
 
 ## Future Roadmap
 

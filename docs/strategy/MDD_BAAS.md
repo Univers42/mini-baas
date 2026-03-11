@@ -386,7 +386,7 @@ According to industry research (e.g., [Building a Metadata-Driven Data Architect
 * **Schema Evolution & Metadata Versioning:** Schema changes are instantaneous and reversible. Adding a column generates a new Master Document with `version: 2`. Rollbacks are just a pointer flip in the Control Plane.
 * **Usage Metering (Event-Driven):** Calculating bills inside the API destroys performance. The Data Plane pushes events asynchronously to a queue (BullMQ), enabling the Control Plane to process billing without impacting request latency.
 
-~~~mermaid
+```mermaid
 sequenceDiagram
     participant Client
     participant DP as Data Plane (NestJS)
@@ -406,4 +406,4 @@ sequenceDiagram
     CP->>CP: Update Tenant Usage Metrics
     CP->>CP: Check Tier Limits
     deactivate CP
-~~~
+```
