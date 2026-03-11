@@ -278,12 +278,16 @@ mini-baas follows a strict **three-plane architecture** inspired by [Kubernetes]
 ```mermaid
 graph TB
     subgraph Infrastructure Layer
+        direction TB
+        INF_ANCHOR[ ]
         SYSDB[(MongoDB 7<br/>Control Plane DB)]
         CACHE[(Redis 7<br/>Tenant Cache)]
         CRYPTO[AES-256-GCM<br/>Encryption Service]
     end
 
     subgraph Control Plane
+        direction TB
+        CTRL_ANCHOR[ ]
         TENANT[Tenant Service<br/>Lifecycle Management]
         META[Metadata Service<br/>Schema Versioning]
         IAM[IAM / Policy Engine<br/>CASL ABAC]
@@ -291,18 +295,24 @@ graph TB
     end
 
     subgraph Engine Layer
+        direction TB
+        ENG_ANCHOR[ ]
         FACTORY[DatabaseProvider<br/>Factory]
         SQL[SQL Adapter<br/>Knex.js]
         NOSQL[NoSQL Adapter<br/>MongoDB Native]
     end
 
     subgraph Data Plane
+        direction TB
+        DATA_ANCHOR[ ]
         DYN[Dynamic Controller<br/>Universal CRUD API]
         VAL[Validation Engine<br/>AJV Runtime]
         SVC[Dynamic Service<br/>Orchestration]
     end
 
     subgraph Module Layer
+        direction TB
+        MOD_ANCHOR[ ]
         AUTH[Auth Module]
         SESS[Session Module]
         RBAC[RBAC Module]
@@ -345,6 +355,42 @@ graph TB
     SQL --> SL[(SQLite)]
     SQL --> MS[(MSSQL)]
     NOSQL --> MO[(MongoDB)]
+
+    INF_ANCHOR ~~~ CTRL_ANCHOR
+    CTRL_ANCHOR ~~~ DATA_ANCHOR
+    DATA_ANCHOR ~~~ MOD_ANCHOR
+    MOD_ANCHOR ~~~ ENG_ANCHOR
+
+    MOD_ANCHOR ~~~ AUTH
+    AUTH ~~~ SESS
+    SESS ~~~ RBAC
+    RBAC ~~~ AUDIT
+    AUDIT ~~~ GDPR
+    GDPR ~~~ MAIL
+    MAIL ~~~ NOTIF
+    NOTIF ~~~ NEWS
+    NEWS ~~~ FILES
+    FILES ~~~ ANALYTICS
+    ANALYTICS ~~~ WEBHOOK
+    WEBHOOK ~~~ APIKEY
+    APIKEY ~~~ SEC
+
+    classDef infra fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
+    classDef control fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
+    classDef data fill:#FFF8E1,stroke:#F9A825,stroke-width:2px,color:#5D4037;
+    classDef module fill:#F3E5F5,stroke:#8E24AA,stroke-width:2px,color:#4A148C;
+    classDef engine fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+    classDef db fill:#ECEFF1,stroke:#546E7A,stroke-width:2px,color:#263238;
+
+    class SYSDB,CACHE,CRYPTO infra;
+    class TENANT,META,IAM,PROV control;
+    class DYN,VAL,SVC data;
+    class AUTH,SESS,RBAC,AUDIT,GDPR,MAIL,NOTIF,NEWS,FILES,ANALYTICS,WEBHOOK,APIKEY,SEC module;
+    class FACTORY,SQL,NOSQL engine;
+    class PG,MY,MA,SL,MS,MO db;
+
+    classDef hidden fill:transparent,stroke:transparent,color:transparent;
+    class INF_ANCHOR,CTRL_ANCHOR,ENG_ANCHOR,DATA_ANCHOR,MOD_ANCHOR hidden;
 ```
 
 ### The Three Planes
