@@ -3,7 +3,7 @@
 > This document is the canonical strategic synthesis of `BaaS.md`, `MDD_BAAS.md`, `whymongo.md`, and `dylan.md`.
 > It defines the product thesis, architecture decisions, risk posture, implementation stages, and measurable success criteria.
 
-# todo: [ ] añadir un preaumbulo para convencer al lector
+# todo: [x] añadir un preaumbulo para convencer al lector
 # todo: [ ] añadir todos los diagramas que se han hecho con sentido y en orden
 # todo: [ ] añadir toda la información posible para que todos sepamos cuál es la estrategia. esta debe ser de manera gradual para que podamos entender todos (tanto de dentro como de fuera del proyecto)
 # todo: [ ] añadir clases para añadir colores para los diagramas (los que hay ahora pueden no ayudar al lector)
@@ -29,6 +29,7 @@
 
 ## Table of Contents
 
+0. [Preamble](#preamble)
 1. [Executive Summary](#1-executive-summary)
 2. [Product Thesis and Non-Negotiables](#2-product-thesis-and-non-negotiables)
 3. [Architectural Decision Framework](#3-architectural-decision-framework)
@@ -48,6 +49,30 @@
 17. [Final Synthesis](#17-final-synthesis)
 18. [Official Sources and References](#18-official-sources-and-references)
 19. [Source Documents](#19-source-documents)
+
+---
+
+## Preamble
+
+Every time a developer starts a new project, they face the same invisible tax: authentication, authorization, validation, CRUD scaffolding, audit logging, multi-tenancy, rate limiting — all re-implemented from scratch or assembled from loosely integrated libraries. This is not accidental complexity. It is structural waste.
+
+`mini-baas` exists to eliminate that tax.
+
+The premise is simple but powerful: **if the behavior of a backend can be described in metadata, it can be generated at runtime without a single line of custom server code per tenant.** The tenant defines what data exists, what transformations apply, and what rules govern access — the platform interprets those definitions and executes accordingly. The same runtime serves a restaurant ordering system, a logistics tracker, and a social platform, without a single deployment per tenant.
+
+This is not a new idea. Firebase, Supabase, and Hasura have all explored fragments of it. What `mini-baas` does differently is commit to the full contract: a metadata-driven, adapter-agnostic, self-hostable App Factory where tenant schemas, policies, hooks, and billing live as first-class runtime objects — not as code checked into a repository.
+
+This document is the canonical blueprint for how `mini-baas` works and why every major architectural decision was made. It is not a product one-pager. It is an engineering manifesto:
+
+- **Architects** will find the rationale for plane separation, database selection, and isolation models.
+- **Developers** will find the interface contracts, adaptation strategies, and phased implementation plan.
+- **Evaluators and academic reviewers** will find explicit tradeoff analysis, consistency guarantees, formal relational support, and measurable success criteria.
+
+The strategy is deliberate and staged. It does not promise everything at once. It promises a clear path from a working MongoDB MVP to a multi-engine, multi-tenant platform with formal relational support — each phase building on the last, each decision made to preserve optionality for what comes next.
+
+If you question whether a metadata-driven approach can satisfy strict academic schema and relation requirements, [Section 9](#9-query-abstraction-and-adapter-strategy) and [Section 16](#16-strategic-position-for-ft_transcendence) address it directly. If you wonder how real isolation works in shared infrastructure, [Sections 7](#7-multi-tenant-isolation-model) and [8](#8-authorization-and-policy-enforcement) go deep. If you want to understand what "done" looks like in measurable terms, [Section 14](#14-slos-and-success-metrics) defines it precisely.
+
+Read this document once to understand the vision. Read it again before any significant architectural decision.
 
 ---
 
