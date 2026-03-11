@@ -539,6 +539,17 @@ graph TD
     style SEC fill:#ff6b6b,color:#fff
     style MAIL_CFG fill:#4ecdc4,color:#fff
     style FILE_CFG fill:#45b7d1,color:#fff
+
+    classDef root fill:#E3F2FD,stroke:#1565C0,stroke-width:2px,color:#0D47A1;
+    classDef metadata fill:#E8F5E9,stroke:#2E7D32,stroke-width:2px,color:#1B5E20;
+    classDef configHub fill:#FFF3E0,stroke:#EF6C00,stroke-width:2px,color:#E65100;
+    classDef sensitive fill:#FDECEA,stroke:#C62828,stroke-width:2px,color:#7F1D1D;
+    classDef mail fill:#E0F7FA,stroke:#00838F,stroke-width:2px,color:#004D40;
+    classDef files fill:#EDE7F6,stroke:#5E35B1,stroke-width:2px,color:#311B92;
+
+    class MD root;
+    class ID,STATUS,DB_CFG,SCHEMA,HOOKS,PERMS,VERSION metadata;
+    class CONFIG configHub;
 ```
 
 ### Structure
