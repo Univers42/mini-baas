@@ -588,22 +588,16 @@ The Master Document is inherently document-shaped. Using MongoDB for it is not a
 
 When a tenant is activated, mini-baas auto-provisions **16 system entities** in the tenant's own database. These are prefixed `_baas_` to isolate them from business data (your `orders`, `products`, `menus`).
 
+Split into three focused ER diagrams for readability.
+
+### System Entities (1/3) - Identity and Access
+
 ```mermaid
 erDiagram
     _baas_users ||--o{ _baas_sessions : "has"
-    _baas_users ||--o{ _baas_audit_log : "generates"
-    _baas_users ||--o{ _baas_notifications : "receives"
-    _baas_users ||--o{ _baas_consents : "grants"
-    _baas_users ||--o{ _baas_deletion_requests : "requests"
-    _baas_users ||--o{ _baas_files : "uploads"
-    _baas_users ||--o{ _baas_analytics_events : "triggers"
-
+    _baas_users ||--o{ _baas_password_resets : "requests"
     _baas_roles ||--o{ _baas_role_permissions : "contains"
     _baas_permissions ||--o{ _baas_role_permissions : "assigned via"
-
-    _baas_users ||--o{ _baas_password_resets : "requests"
-
-    _baas_webhooks ||--o{ _baas_webhook_logs : "logs"
 
     _baas_users {
         uuid id PK
@@ -630,6 +624,14 @@ erDiagram
         datetime expiresAt
     }
 
+    _baas_password_resets {
+        uuid id PK
+        uuid userId FK
+        string token UK
+        datetime expiresAt
+        boolean used
+    }
+
     _baas_roles {
         uuid id PK
         string name UK
@@ -650,17 +652,6 @@ erDiagram
         uuid permissionId FK
     }
 
-    _baas_audit_log {
-        uuid id PK
-        uuid userId FK
-        string action
-        string entity
-        string entityId
-        json before
-        json after
-        string ipAddress
-    }
-
     _baas_api_keys {
         uuid id PK
         string name
@@ -671,23 +662,42 @@ erDiagram
         datetime expiresAt
         boolean isActive
     }
+```
 
-    _baas_webhooks {
+### System Entities (2/3) - Activity and Compliance
+
+```mermaid
+erDiagram
+    _baas_users ||--o{ _baas_audit_log : "generates"
+    _baas_users ||--o{ _baas_notifications : "receives"
+    _baas_users ||--o{ _baas_consents : "grants"
+    _baas_users ||--o{ _baas_deletion_requests : "requests"
+    _baas_users ||--o{ _baas_analytics_events : "triggers"
+
+    _baas_users {
         uuid id PK
-        string url
-        array events
-        string secret
+        string email UK
+        string passwordHash
+        string firstName
+        string lastName
+        array roles
         boolean isActive
-        integer failCount
+        boolean isDeleted
+        integer failedLoginAttempts
+        datetime lockedUntil
+        datetime lastLoginAt
+        json metadata
     }
 
-    _baas_files {
+    _baas_audit_log {
         uuid id PK
-        string originalName
-        string storagePath
-        string mimeType
-        integer size
-        uuid uploadedBy FK
+        uuid userId FK
+        string action
+        string entity
+        string entityId
+        json before
+        json after
+        string ipAddress
     }
 
     _baas_consents {
@@ -708,13 +718,6 @@ erDiagram
         boolean read
     }
 
-    _baas_newsletter_subs {
-        uuid id PK
-        string email UK
-        string status
-        string confirmToken
-    }
-
     _baas_analytics_events {
         uuid id PK
         string event
@@ -723,19 +726,52 @@ erDiagram
         datetime timestamp
     }
 
-    _baas_password_resets {
-        uuid id PK
-        uuid userId FK
-        string token UK
-        datetime expiresAt
-        boolean used
-    }
-
     _baas_deletion_requests {
         uuid id PK
         uuid userId FK
         string reason
         string status
+    }
+```
+
+### System Entities (3/3) - Files, Webhooks, and Messaging
+
+```mermaid
+erDiagram
+    _baas_users ||--o{ _baas_files : "uploads"
+    _baas_webhooks ||--o{ _baas_webhook_logs : "logs"
+
+    _baas_users {
+        uuid id PK
+        string email UK
+        string passwordHash
+        string firstName
+        string lastName
+        array roles
+        boolean isActive
+        boolean isDeleted
+        integer failedLoginAttempts
+        datetime lockedUntil
+        datetime lastLoginAt
+        json metadata
+    }
+
+    _baas_files {
+        uuid id PK
+        string originalName
+        string storagePath
+        string mimeType
+        integer size
+        uuid uploadedBy FK
+    }
+
+    _baas_webhooks {
+        uuid id PK
+        string url
+        array events
+        string secret
+        boolean isActive
+        integer failCount
     }
 
     _baas_webhook_logs {
@@ -744,6 +780,13 @@ erDiagram
         string event
         json payload
         integer statusCode
+    }
+
+    _baas_newsletter_subs {
+        uuid id PK
+        string email UK
+        string status
+        string confirmToken
     }
 ```
 
