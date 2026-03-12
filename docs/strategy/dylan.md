@@ -12,18 +12,19 @@
 2. [Why mini-baas Exists](#why-mini-baas-exists)
 3. [Core Principles](#core-principles)
 4. [High-Level Architecture](#high-level-architecture)
-5. [The Polyglot Engine — How It Works](#the-polyglot-engine--how-it-works)
-6. [The Master Document — A Tenant's DNA](#the-master-document--a-tenants-dna)
-7. [System Entity Model](#system-entity-model)
-8. [Module Inventory](#module-inventory)
-9. [Security Architecture](#security-architecture)
-10. [Request Lifecycle](#request-lifecycle)
-11. [Technology Stack](#technology-stack)
-12. [Implementation Phases](#implementation-phases)
-13. [Verification & Testing Strategy](#verification--testing-strategy)
-14. [Key Architectural Decisions](#key-architectural-decisions)
-15. [Codebase Map](#codebase-map)
-16. [Future Roadmap](#future-roadmap-1)
+5. [Layer Architecture](#layer-architecture)
+6. [The Polyglot Engine — How It Works](#the-polyglot-engine--how-it-works)
+7. [The Master Document — A Tenant's DNA](#the-master-document--a-tenants-dna)
+8. [System Entity Model](#system-entity-model)
+9. [Module Inventory](#module-inventory)
+10. [Security Architecture](#security-architecture)
+11. [Request Lifecycle](#request-lifecycle)
+12. [Technology Stack](#technology-stack)
+13. [Implementation Phases](#implementation-phases)
+14. [Verification & Testing Strategy](#verification--testing-strategy)
+15. [Key Architectural Decisions](#key-architectural-decisions)
+16. [Codebase Map](#codebase-map)
+17. [Future Roadmap](#future-roadmap)
 
 ---
 
@@ -45,80 +46,45 @@ This document is the canonical blueprint for how `mini-baas` works and why every
 
 The strategy is deliberate and staged. It does not promise everything at once. It promises a clear path from a working MongoDB MVP to a multi-engine, multi-tenant platform with formal relational support — each phase building on the last, each decision made to preserve optionality for what comes next.
 
-If you question whether a metadata-driven approach can satisfy strict academic schema and relation requirements, [Section 9](#9-query-abstraction-and-adapter-strategy) and [Section 16](#16-strategic-position-for-ft_transcendence) address it directly. If you wonder how real isolation works in shared infrastructure, [Sections 7](#7-multi-tenant-isolation-model) and [8](#8-authorization-and-policy-enforcement) go deep. If you want to understand what "done" looks like in measurable terms, [Section 14](#14-slos-and-success-metrics) defines it precisely.
+### Architectural Alternatives Considered
+
+There are three obvious industry paths for building a BaaS, and `mini-baas` deliberately rejects all three as the primary strategy:
+
+| Alternative | Strength | Weakness | Why It Is Not the Core Strategy |
+|---|---|---|---|
+| **Code + Infrastructure Generation** (Supabase-like) | Native performance, strong hard isolation | High orchestration cost, container sprawl, Kubernetes-heavy lifecycle management | Overkill for a self-hosted, single-command developer platform |
+| **Serverless Edge** (Firebase / Cloudflare-like) | Massive scale and low end-user latency | Severe vendor lock-in, weak local self-hosting story | Conflicts with the project's self-hosted and auditable goals |
+| **Pure NoSQL / Schema-less** (early Parse / Appwrite-like) | Fast iteration and highly flexible document storage | Weak relational guarantees, higher noisy-neighbor risk, harder academic defense for strict schema requirements | Too risky for environments that explicitly expect well-defined relations |
+
+The chosen direction is a **metadata-driven modular monolith**: one shared fleet of application containers, one Control Plane for governance, and one Data Plane that mutates behavior at runtime from metadata. That gives us the operational simplicity of `docker-compose`, the portability of self-hosting, and the extensibility of a runtime interpreter instead of a deployment generator.
+
+### Strategic Position for ft_transcendence
+
+In the `ft_transcendence` context, architecture is not only about elegance. It is also about surviving evaluation constraints while still earning points for technical ambition.
+
+| Requirement Pressure | Why the Architecture Helps |
+|---|---|
+| **Single-command deployment** | A modular monolith with shared infrastructure is compatible with one Docker Compose entrypoint |
+| **Public API + framework requirements** | The Data Plane is already a universal API surface on top of NestJS |
+| **Organization / tenant logic** | Multi-tenancy is native to the platform, not bolted on later |
+| **Custom technical module** | The metadata engine, adapter layer, and runtime schema execution are themselves the custom module |
+
+The biggest evaluation risk is the classic objection: *"the database must have a clear schema and well-defined relations."* A purely schema-less MongoDB story is weak in that environment. The mitigation is deliberate: MongoDB remains the right choice for the Control Plane, while the adapter layer preserves a PostgreSQL-compatible relational Data Plane path so the project can present a formal ER model when strict evaluators require it.
+
+### Critical Technical Risks
+
+This architecture is viable, but only if its hardest runtime risks are acknowledged explicitly:
+
+- **Just-in-time validation bottleneck**: compiling validators on the hot path can saturate the Node.js event loop. Mitigation: compile once, cache per tenant/version, and pre-warm frequently used validators to avoid cold-start latency spikes.
+- **`isolated-vm` memory trap**: sandboxing is necessary, but isolates still consume RAM and can become a denial-of-service vector if left unconstrained. Mitigation: hard CPU and memory limits, isolate pooling, and forced termination on budget overrun.
+- **Observability hell**: dynamic schemas make ordinary stack traces insufficient. Mitigation: tenant-aware structured logs, request correlation IDs, and distributed traces across API, queue, and database boundaries.
+
+If you question whether a metadata-driven approach can satisfy strict academic schema and relation requirements, [The Polyglot Engine](#the-polyglot-engine--how-it-works) and [Strategic Position for ft_transcendence](#strategic-position-for-ft_transcendence) address it directly. If you wonder how real isolation works in shared infrastructure, [Core Principles — Isolation](#3-per-tenant-isolation) and [Security Architecture](#security-architecture) go deep. If you want to understand what "done" looks like in measurable terms, [Verification & Testing Strategy](#verification--testing-strategy) defines it precisely.
 
 Read this document once to understand the vision. Read it again before any significant architectural decision.
 
 ---
 
-## Layer Architecture
-
-```bash
-.
-├── common
-│   ├── crypto
-│   ├── decorators
-│   ├── exceptions
-│   ├── interceptors
-│   ├── interfaces
-│   ├── schemas
-│   └── types
-├── infrastructure
-│   ├── cache
-│   └── system-db
-├── modules
-│   ├── analytics
-│   ├── api-keys
-│   ├── audit
-│   ├── auth
-│   │   ├── decorators
-│   │   ├── dto
-│   │   ├── guards
-│   │   └── services
-│   ├── control-plane
-│   │   ├── iam
-│   │   ├── metadata
-│   │   │   └── dto
-│   │   ├── provisioner
-│   │   └── tenant
-│   │       └── dto
-│   ├── data-plane
-│   │   ├── dynamic-api
-│   │   ├── transformation
-│   │   └── validation
-│   ├── engines
-│   │   ├── core
-│   │   ├── nosql
-│   │   └── sql
-│   ├── files
-│   ├── gdpr
-│   ├── mail
-│   ├── newsletter
-│   ├── notification
-│   ├── rbac
-│   │   ├── decorators
-│   │   ├── guards
-│   │   └── services
-│   ├── runtime
-│   │   ├── background-jobs
-│   │   └── hooks
-│   ├── security
-│   │   ├── guards
-│   │   └── middleware
-│   ├── session
-│   └── webhook
-└── studio
-    ├── bootstrap
-    ├── collections
-    ├── config
-    ├── environments
-    ├── schemas
-    ├── seeds
-    └── types
-
-61 directories
-
-```
 ## Vision
 
 mini-baas is a **metadata-driven App Factory**. It is the same pattern used internally by [Supabase](https://supabase.com/), [Hasura](https://hasura.io/), and [Appwrite](https://appwrite.io/) — but fully open, self-hostable, and database-agnostic from day one.
@@ -256,6 +222,22 @@ graph TD
     class Cache database;
 	class DB1,DB2 databaseIsolated;
 ```
+
+#### Isolation Strategy by Tier
+
+mini-baas supports multiple isolation models and chooses among them deliberately rather than pretending one model fits every tenant:
+
+| Model | Shape | Strength | Tradeoff | Best Fit |
+|---|---|---|---|---|
+| **Shared DB + Shared Schema** | One set of tables with `tenantId` filtering | Lowest infrastructure cost | Highest blast radius if filtering logic fails | Small/internal tenants only |
+| **Shared DB + Separate Schemas** | One database, one schema per tenant | Stronger logical isolation | More schema orchestration overhead | Growing SaaS tenants |
+| **Database per Tenant** | One database per tenant | Strong data isolation and easy export/delete | More operational and connection cost | Enterprise and regulated tenants |
+| **Cluster/Namespace per Tenant** | Dedicated compute and network boundary | Strongest isolation | Highest cost and orchestration complexity | Premium isolation tiers |
+
+The recommended production posture is hybrid:
+- Small tenants use shared infrastructure with strict tenant scoping.
+- Enterprise tenants use dedicated databases and, when required, dedicated compute boundaries.
+- Cache keys are always tenant namespaced, for example `tenant:ws_123:entity:orders:page:1`.
 
 
 ### 4. Convention Over Configuration, Configuration Over Code
@@ -401,6 +383,95 @@ graph TB
 | **Engine Layer** | Database abstraction, connection pooling, query translation | [Knex.js](https://knexjs.org/) + [MongoDB Node Driver](https://www.mongodb.com/docs/drivers/node/current/) |
 | **Data Plane** | Dynamic API, validation, auth, sessions, all modules | Tenant's own database (any engine) |
 
+### Control Plane Resilience Rule
+
+Control Plane failure must not immediately break Data Plane execution for already-known tenants. That requires:
+- Tenant metadata to be cached in Redis by tenant and version.
+- Compiled policy snapshots to remain locally available for active tenants.
+- Adapter connection settings to be cacheable and refreshable without re-provisioning.
+
+This keeps governance centralized while preserving runtime availability when the metadata store is temporarily degraded.
+
+### Caching Strategy
+
+mini-baas uses three distinct caches, each tenant-scoped:
+- **Metadata Cache** for the Master Document and activation state.
+- **Compiled Validator Cache** for AJV validators keyed by `tenantId:entity:version`.
+- **Query Result Cache** as an optional acceleration layer for read-heavy endpoints.
+
+All cache entries are TTL-controlled, tenant namespaced, and invalidated on schema version changes.
+
+---
+
+## Layer Architecture
+
+```bash
+.
+├── common
+│   ├── crypto
+│   ├── decorators
+│   ├── exceptions
+│   ├── interceptors
+│   ├── interfaces
+│   ├── schemas
+│   └── types
+├── infrastructure
+│   ├── cache
+│   └── system-db
+├── modules
+│   ├── analytics
+│   ├── api-keys
+│   ├── audit
+│   ├── auth
+│   │   ├── decorators
+│   │   ├── dto
+│   │   ├── guards
+│   │   └── services
+│   ├── control-plane
+│   │   ├── iam
+│   │   ├── metadata
+│   │   │   └── dto
+│   │   ├── provisioner
+│   │   └── tenant
+│   │       └── dto
+│   ├── data-plane
+│   │   ├── dynamic-api
+│   │   ├── transformation
+│   │   └── validation
+│   ├── engines
+│   │   ├── core
+│   │   ├── nosql
+│   │   └── sql
+│   ├── files
+│   ├── gdpr
+│   ├── mail
+│   ├── newsletter
+│   ├── notification
+│   ├── rbac
+│   │   ├── decorators
+│   │   ├── guards
+│   │   └── services
+│   ├── runtime
+│   │   ├── background-jobs
+│   │   └── hooks
+│   ├── security
+│   │   ├── guards
+│   │   └── middleware
+│   ├── session
+│   └── webhook
+└── studio
+    ├── bootstrap
+    ├── collections
+    ├── config
+    ├── environments
+    ├── schemas
+    ├── seeds
+    └── types
+
+61 directories
+
+```
+
 ---
 
 ## The Polyglot Engine — How It Works
@@ -513,6 +584,18 @@ Every database engine maps its native types to a universal set:
 | `json` | `JSONB` | `JSON` | `Object` | `TEXT` |
 | `array` | `JSONB` | `JSON` | `Array` | `TEXT` |
 
+### Consistency Guarantees
+
+mini-baas must never promise guarantees stronger than the weakest supported engine can actually enforce.
+
+| Feature | SQL Engines | MongoDB | Platform Guarantee |
+|---|---|---|---|
+| Transactions | ACID | Limited / scope-dependent | Best effort, adapter-aware |
+| Strong consistency | Yes | Yes for single-document operations | Engine-dependent |
+| Cross-engine joins | Native within one SQL engine | Not applicable in the same way | Not supported across engines |
+
+This is why the abstraction layer expresses intent, not impossible uniformity. Relational joins, multi-entity transactions, and strict consistency rules are exposed only where the target engine can honor them.
+
 ---
 
 ## The Master Document — A Tenant's DNA
@@ -581,6 +664,62 @@ interface MasterDocument {
 | Document-shaped metadata queries | ✅ `{ 'config.security.pepper': { $exists: true } }` | ⚠️ `WHERE config->'security'->'pepper' IS NOT NULL` |
 
 The Master Document is inherently document-shaped. Using MongoDB for it is not a preference — it's the correct tool.
+
+### MongoDB Pattern Fit for the Control Plane
+
+The Control Plane has to solve three problems at the same time:
+- tenant metadata is heterogeneous
+- schemas evolve in production
+- reads must stay fast at scale
+
+MongoDB fits because its document patterns map directly onto those constraints.
+
+#### 1. Polymorphic Pattern
+
+All tenants live in a single logical `tenants` collection even though their business models differ radically. A bookstore tenant, a trip manager tenant, and an e-commerce tenant can all share the same top-level envelope:
+- `tenantId`
+- `status`
+- `database`
+- `schema`
+- `hooks`
+- `permissions`
+- `version`
+
+What changes is the shape inside `schema`, `hooks`, and `permissions`, not the existence of the Master Document itself. That is the polymorphic pattern in practice: similar documents with different internal structures stored together and retrieved with one query such as `db.tenants.findOne({ tenantId })`.
+
+This matters because tenant context resolution is on the hot path. A relational decomposition into `tenants`, `tenant_schemas`, `tenant_fields`, `tenant_hooks`, and `tenant_permissions` would force repeated joins just to rebuild the same runtime object that MongoDB can return in one read.
+
+#### 2. Schema Versioning Pattern
+
+Versioned Master Documents are expected to coexist. Tenant A may still be effectively on v1 while Tenant B already uses v3 with billing metadata, new entities, and additional hooks. MongoDB handles this naturally because documents do not need to be identical to coexist in one collection.
+
+That enables:
+- version-tagged metadata changes
+- lazy migration of old documents when accessed
+- instant rollback by switching the active version pointer rather than rewriting the entire storage model
+
+This is exactly the kind of evolution the Control Plane needs: change without downtime and without forcing every tenant to migrate simultaneously.
+
+#### 3. Schema Validation at the Database Boundary
+
+MongoDB is not "schemaless" in the sense of having no integrity controls. For the Control Plane, that distinction matters. The `tenants` collection can enforce JSON Schema validation so malformed Master Documents never reach the Data Plane.
+
+In practice, that means base rules for all versions can be enforced at the database layer:
+- `tenantId` follows a strict format
+- `status` stays within the allowed lifecycle enum
+- `database.engine` stays within the supported engines
+
+And version-specific rules can be layered on top with `oneOf` or equivalent validator composition so older and newer documents coexist safely. This gives the Control Plane a last line of defense even if the application layer has a bug.
+
+#### Pattern Synergy
+
+The MongoDB story for the Control Plane is not one pattern in isolation:
+- **Polymorphic** keeps all tenant metadata addressable with one collection and one lookup path.
+- **Schema Versioning** allows those documents to evolve independently.
+- **Schema Validation** prevents malformed metadata from entering the system.
+- **Computed** and **Approximation** patterns, covered later in the roadmap, make billing and telemetry reads fast without putting aggregation cost on the request path.
+
+That combination is the real reason MongoDB is the correct Control Plane database here: it optimizes for governance metadata, not for tenant business records.
 
 ---
 
@@ -1191,6 +1330,35 @@ flowchart TD
     style EXEC fill:#9b59b6,color:#fff
 ```
 
+### Tenant-Aware Observability
+
+Observability is part of the platform contract, not an afterthought.
+
+**Metrics captured per tenant:**
+- p95 latency
+- error rate
+- query volume
+- storage usage
+
+**Structured log fields on every request path:**
+- `tenantId`
+- `requestId`
+- `correlationId`
+- `schemaVersion`
+- `adapterType`
+
+Distributed tracing should be treated as mandatory from the beginning for request paths that cross API handlers, queues, hooks, and database calls.
+
+This allows debugging, SLO tracking, and cost attribution at tenant granularity rather than only at process or cluster level.
+
+### Failure Domain Rules
+
+mini-baas is intentionally designed so that failures stay local whenever possible:
+- A tenant database outage should affect only that tenant.
+- A hook crash must not crash the worker or API process.
+- Control Plane downtime should not break tenants already present in cache.
+- Redis loss should degrade performance and rate-limit precision before it degrades correctness.
+
 ---
 
 ## Technology Stack
@@ -1350,7 +1518,7 @@ sequenceDiagram
   Note over API: 1. Context & Validation
   API->>Config: Get schema & DB config
   Config-->>API: Master Document
-  API->>API: Validate payload (Zod)
+    API->>API: Validate payload (AJV compiled schema)
 
   Note over API, Adapt: 2. Adapter Pattern
   API->>Adapt: execute({ action: 'create', ... })
@@ -1384,6 +1552,7 @@ sequenceDiagram
 - Caches compiled validators per `tenantId:entity:version`
 - Validates every POST/PUT/PATCH body before adapter execution
 - Type coercion: string → number, ISO date parsing
+- Pre-warming hot validators is the intended mitigation against first-request cold starts
 
 ### Phase 5: ABAC Authorization
 
@@ -1778,9 +1947,12 @@ Async task queue using [BullMQ](https://docs.bullmq.io/) + [Redis](https://redis
 ### Phase 10: Billing & Usage Metering
 
 - Usage event emission from Data Plane: `{ tenantId, eventType, unitsConsumed, timestamp }`
+- Canonical event types include `read`, `write`, `storage`, and `hook_cpu`
 - Billing aggregator in Control Plane
 - Tier enforcement (request limits, storage limits, entity count limits)
 - Schema versioning endpoints: `GET /_schema/versions`, `POST /_schema/rollback/:version`
+
+Billing is intentionally off the request path: the Data Plane emits usage events, and the Control Plane aggregates them asynchronously. Request handling should never block on billing computation.
 
 
 #### ***Pattern Diagram***
@@ -1870,6 +2042,56 @@ Validate the entire BaaS with a real application:
 - Generate a `UniversalSchemaMap` from the introspected schema
 - Create a tenant Master Document with engine `postgresql`
 - Verify all CRUD operations work through `DynamicController` with zero hardcoded routes
+
+### Operational Deployment Topology
+
+The baseline production deployment separates control and execution concerns at the infrastructure level as well:
+
+```text
+Kubernetes Cluster
+├── control-plane namespace
+├── data-plane namespace
+├── redis
+└── monitoring stack
+```
+
+Enterprise isolation tiers can add:
+- Dedicated namespace per tenant
+- Dedicated database per tenant
+- Separate autoscaling group or node pool for premium workloads
+- NetworkPolicy and secret boundaries per tenant environment
+
+### Governance and Enforced Limits
+
+Governance in mini-baas means the platform can automatically enforce safety, fairness, and predictability rather than depending on convention.
+
+Every tenant should have enforceable limits for:
+- Maximum entities
+- Maximum fields per entity
+- Maximum payload size
+- Maximum hook CPU / execution budget
+- Maximum requests per minute
+
+These rules belong in the Control Plane and are enforced in the gateway and Data Plane.
+
+### System Maturity Stages
+
+The platform evolves in explicit stages:
+- **Stage 1** — Logical multi-tenancy
+- **Stage 2** — Query DSL + policy injection
+- **Stage 3** — Versioned metadata
+- **Stage 4** — Billing + quotas
+- **Stage 5** — Enterprise isolation tiers
+
+### Non-Negotiable Principles
+
+1. Metadata is the source of truth.
+2. Isolation must exist at every layer.
+3. Control Plane and Data Plane must remain separable.
+4. The platform must not claim guarantees stronger than the weakest supported engine.
+5. Every feature must be tenant-aware.
+6. Performance must be cache-driven where repetition exists.
+7. Governance must be enforceable automatically, not socially.
 
 ---
 
