@@ -37,10 +37,9 @@ COMPOSE_CMD := $(shell \
 )
 
 # ── Variables ────────────────────────────────────────
-COMPOSE_DEV  := $(COMPOSE_CMD) -f docker-compose.dev.yml
-CONTAINER    := baas-dev-engine
-APP      := backend
-HELP_FILTER ?=
+COMPOSE_DEV		:= $(COMPOSE_CMD) -f docker-compose.dev.yml
+CONTAINER		:= baas-dev-engine
+APP				:= backend
 
 # Colors
 BLUE    := \033[0;34m
@@ -243,11 +242,31 @@ reset-db: ## 💥 Destroy all data volumes (Mongo, Postgres, Redis)
 #  ❓ HELP
 # ============================================
 
-help: ## ❓ Show this help message (option: HELP_FILTER=<pattern>)
-	@echo -e "$(BOLD)mini-baas — Available Commands$(NC)"
-	@if [ -n "$(HELP_FILTER)" ]; then \
-		echo -e "$(DIM)Filter: $(HELP_FILTER)$(NC)"; \
-	fi
+help: ## ❓ Show categories
+	@echo -e "$(BOLD)mini-baas — Command Manual$(NC)"
+	@echo -e "Use $(CYAN)make help-<category>$(NC) to view specific commands."
+	@echo ""
+	@echo -e "$(DIM)CATEGORIES:$(NC)"
+	@echo -e "  $(GREEN)bootstrap$(NC)  ⚡ Engine initialization and setup"
+	@echo -e "  $(GREEN)docker$(NC)     🐳 Container lifecycle (up, down, logs)"
+	@echo -e "  $(GREEN)clean$(NC)      🧹 System resets and artifact removal"
+	@echo -e "  $(GREEN)dev$(NC)        📦 Development tools and shells"
+	@echo -e "  $(GREEN)check$(NC)      ✅ Code quality, formatting, and typing"
+	@echo -e "  $(GREEN)port$(NC)       🔌 Network and port management"
+	@echo -e "  $(GREEN)script$(NC)     🩺 Diagnostics, tests, and DB seeds"
+	@echo -e "  $(GREEN)all$(NC)        📜 Show every available command"
+	@echo ""
+	@echo -e "$(DIM)Examples: make help-docker | make help-all$(NC)"
+
+help-all: ## ❓ Show all commands
+	@echo -e "$(BOLD)mini-baas — All Commands$(NC)"
+	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk -v filter='$(HELP_FILTER)' 'BEGIN {FS = ":.*?## "; IGNORECASE = 1} \
-			{if (filter == "" || $$1 ~ filter || $$2 ~ filter) printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+
+help-%: ## ❓ Show commands for a specific category
+	@echo -e "$(BOLD)mini-baas — Commands matching: $(CYAN)$*$(NC)"
+	@echo ""
+	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		awk -v filter="$*" 'BEGIN {FS = ":.*?## "; IGNORECASE = 1} \
+			{if ($$1 ~ filter || $$2 ~ filter) printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
