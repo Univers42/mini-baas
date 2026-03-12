@@ -12,18 +12,19 @@
 2. [Why mini-baas Exists](#why-mini-baas-exists)
 3. [Core Principles](#core-principles)
 4. [High-Level Architecture](#high-level-architecture)
-5. [The Polyglot Engine — How It Works](#the-polyglot-engine--how-it-works)
-6. [The Master Document — A Tenant's DNA](#the-master-document--a-tenants-dna)
-7. [System Entity Model](#system-entity-model)
-8. [Module Inventory](#module-inventory)
-9. [Security Architecture](#security-architecture)
-10. [Request Lifecycle](#request-lifecycle)
-11. [Technology Stack](#technology-stack)
-12. [Implementation Phases](#implementation-phases)
-13. [Verification & Testing Strategy](#verification--testing-strategy)
-14. [Key Architectural Decisions](#key-architectural-decisions)
-15. [Codebase Map](#codebase-map)
-16. [Future Roadmap](#future-roadmap-1)
+5. [Layer Architecture](#layer-architecture)
+6. [The Polyglot Engine — How It Works](#the-polyglot-engine--how-it-works)
+7. [The Master Document — A Tenant's DNA](#the-master-document--a-tenants-dna)
+8. [System Entity Model](#system-entity-model)
+9. [Module Inventory](#module-inventory)
+10. [Security Architecture](#security-architecture)
+11. [Request Lifecycle](#request-lifecycle)
+12. [Technology Stack](#technology-stack)
+13. [Implementation Phases](#implementation-phases)
+14. [Verification & Testing Strategy](#verification--testing-strategy)
+15. [Key Architectural Decisions](#key-architectural-decisions)
+16. [Codebase Map](#codebase-map)
+17. [Future Roadmap](#future-roadmap)
 
 ---
 
@@ -78,80 +79,12 @@ This architecture is viable, but only if its hardest runtime risks are acknowled
 - **`isolated-vm` memory trap**: sandboxing is necessary, but isolates still consume RAM and can become a denial-of-service vector if left unconstrained. Mitigation: hard CPU and memory limits, isolate pooling, and forced termination on budget overrun.
 - **Observability hell**: dynamic schemas make ordinary stack traces insufficient. Mitigation: tenant-aware structured logs, request correlation IDs, and distributed traces across API, queue, and database boundaries.
 
-If you question whether a metadata-driven approach can satisfy strict academic schema and relation requirements, [Section 9](#9-query-abstraction-and-adapter-strategy) and [Section 16](#16-strategic-position-for-ft_transcendence) address it directly. If you wonder how real isolation works in shared infrastructure, [Sections 7](#7-multi-tenant-isolation-model) and [8](#8-authorization-and-policy-enforcement) go deep. If you want to understand what "done" looks like in measurable terms, [Section 14](#14-slos-and-success-metrics) defines it precisely.
+If you question whether a metadata-driven approach can satisfy strict academic schema and relation requirements, [The Polyglot Engine](#the-polyglot-engine--how-it-works) and [Strategic Position for ft_transcendence](#strategic-position-for-ft_transcendence) address it directly. If you wonder how real isolation works in shared infrastructure, [Core Principles — Isolation](#3-per-tenant-isolation) and [Security Architecture](#security-architecture) go deep. If you want to understand what "done" looks like in measurable terms, [Verification & Testing Strategy](#verification--testing-strategy) defines it precisely.
 
 Read this document once to understand the vision. Read it again before any significant architectural decision.
 
 ---
 
-## Layer Architecture
-
-```bash
-.
-├── common
-│   ├── crypto
-│   ├── decorators
-│   ├── exceptions
-│   ├── interceptors
-│   ├── interfaces
-│   ├── schemas
-│   └── types
-├── infrastructure
-│   ├── cache
-│   └── system-db
-├── modules
-│   ├── analytics
-│   ├── api-keys
-│   ├── audit
-│   ├── auth
-│   │   ├── decorators
-│   │   ├── dto
-│   │   ├── guards
-│   │   └── services
-│   ├── control-plane
-│   │   ├── iam
-│   │   ├── metadata
-│   │   │   └── dto
-│   │   ├── provisioner
-│   │   └── tenant
-│   │       └── dto
-│   ├── data-plane
-│   │   ├── dynamic-api
-│   │   ├── transformation
-│   │   └── validation
-│   ├── engines
-│   │   ├── core
-│   │   ├── nosql
-│   │   └── sql
-│   ├── files
-│   ├── gdpr
-│   ├── mail
-│   ├── newsletter
-│   ├── notification
-│   ├── rbac
-│   │   ├── decorators
-│   │   ├── guards
-│   │   └── services
-│   ├── runtime
-│   │   ├── background-jobs
-│   │   └── hooks
-│   ├── security
-│   │   ├── guards
-│   │   └── middleware
-│   ├── session
-│   └── webhook
-└── studio
-    ├── bootstrap
-    ├── collections
-    ├── config
-    ├── environments
-    ├── schemas
-    ├── seeds
-    └── types
-
-61 directories
-
-```
 ## Vision
 
 mini-baas is a **metadata-driven App Factory**. It is the same pattern used internally by [Supabase](https://supabase.com/), [Hasura](https://hasura.io/), and [Appwrite](https://appwrite.io/) — but fully open, self-hostable, and database-agnostic from day one.
@@ -467,6 +400,77 @@ mini-baas uses three distinct caches, each tenant-scoped:
 - **Query Result Cache** as an optional acceleration layer for read-heavy endpoints.
 
 All cache entries are TTL-controlled, tenant namespaced, and invalidated on schema version changes.
+
+---
+
+## Layer Architecture
+
+```bash
+.
+├── common
+│   ├── crypto
+│   ├── decorators
+│   ├── exceptions
+│   ├── interceptors
+│   ├── interfaces
+│   ├── schemas
+│   └── types
+├── infrastructure
+│   ├── cache
+│   └── system-db
+├── modules
+│   ├── analytics
+│   ├── api-keys
+│   ├── audit
+│   ├── auth
+│   │   ├── decorators
+│   │   ├── dto
+│   │   ├── guards
+│   │   └── services
+│   ├── control-plane
+│   │   ├── iam
+│   │   ├── metadata
+│   │   │   └── dto
+│   │   ├── provisioner
+│   │   └── tenant
+│   │       └── dto
+│   ├── data-plane
+│   │   ├── dynamic-api
+│   │   ├── transformation
+│   │   └── validation
+│   ├── engines
+│   │   ├── core
+│   │   ├── nosql
+│   │   └── sql
+│   ├── files
+│   ├── gdpr
+│   ├── mail
+│   ├── newsletter
+│   ├── notification
+│   ├── rbac
+│   │   ├── decorators
+│   │   ├── guards
+│   │   └── services
+│   ├── runtime
+│   │   ├── background-jobs
+│   │   └── hooks
+│   ├── security
+│   │   ├── guards
+│   │   └── middleware
+│   ├── session
+│   └── webhook
+└── studio
+    ├── bootstrap
+    ├── collections
+    ├── config
+    ├── environments
+    ├── schemas
+    ├── seeds
+    └── types
+
+61 directories
+
+```
 
 ---
 
