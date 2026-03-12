@@ -45,6 +45,39 @@ This document is the canonical blueprint for how `mini-baas` works and why every
 
 The strategy is deliberate and staged. It does not promise everything at once. It promises a clear path from a working MongoDB MVP to a multi-engine, multi-tenant platform with formal relational support — each phase building on the last, each decision made to preserve optionality for what comes next.
 
+### Architectural Alternatives Considered
+
+There are three obvious industry paths for building a BaaS, and `mini-baas` deliberately rejects all three as the primary strategy:
+
+| Alternative | Strength | Weakness | Why It Is Not the Core Strategy |
+|---|---|---|---|
+| **Code + Infrastructure Generation** (Supabase-like) | Native performance, strong hard isolation | High orchestration cost, container sprawl, Kubernetes-heavy lifecycle management | Overkill for a self-hosted, single-command developer platform |
+| **Serverless Edge** (Firebase / Cloudflare-like) | Massive scale and low end-user latency | Severe vendor lock-in, weak local self-hosting story | Conflicts with the project's self-hosted and auditable goals |
+| **Pure NoSQL / Schema-less** (early Parse / Appwrite-like) | Fast iteration and highly flexible document storage | Weak relational guarantees, higher noisy-neighbor risk, harder academic defense for strict schema requirements | Too risky for environments that explicitly expect well-defined relations |
+
+The chosen direction is a **metadata-driven modular monolith**: one shared fleet of application containers, one Control Plane for governance, and one Data Plane that mutates behavior at runtime from metadata. That gives us the operational simplicity of `docker-compose`, the portability of self-hosting, and the extensibility of a runtime interpreter instead of a deployment generator.
+
+### Strategic Position for ft_transcendence
+
+In the `ft_transcendence` context, architecture is not only about elegance. It is also about surviving evaluation constraints while still earning points for technical ambition.
+
+| Requirement Pressure | Why the Architecture Helps |
+|---|---|
+| **Single-command deployment** | A modular monolith with shared infrastructure is compatible with one Docker Compose entrypoint |
+| **Public API + framework requirements** | The Data Plane is already a universal API surface on top of NestJS |
+| **Organization / tenant logic** | Multi-tenancy is native to the platform, not bolted on later |
+| **Custom technical module** | The metadata engine, adapter layer, and runtime schema execution are themselves the custom module |
+
+The biggest evaluation risk is the classic objection: *"the database must have a clear schema and well-defined relations."* A purely schema-less MongoDB story is weak in that environment. The mitigation is deliberate: MongoDB remains the right choice for the Control Plane, while the adapter layer preserves a PostgreSQL-compatible relational Data Plane path so the project can present a formal ER model when strict evaluators require it.
+
+### Critical Technical Risks
+
+This architecture is viable, but only if its hardest runtime risks are acknowledged explicitly:
+
+- **Just-in-time validation bottleneck**: compiling validators on the hot path can saturate the Node.js event loop. Mitigation: compile once, cache per tenant/version, and pre-warm frequently used validators to avoid cold-start latency spikes.
+- **`isolated-vm` memory trap**: sandboxing is necessary, but isolates still consume RAM and can become a denial-of-service vector if left unconstrained. Mitigation: hard CPU and memory limits, isolate pooling, and forced termination on budget overrun.
+- **Observability hell**: dynamic schemas make ordinary stack traces insufficient. Mitigation: tenant-aware structured logs, request correlation IDs, and distributed traces across API, queue, and database boundaries.
+
 If you question whether a metadata-driven approach can satisfy strict academic schema and relation requirements, [Section 9](#9-query-abstraction-and-adapter-strategy) and [Section 16](#16-strategic-position-for-ft_transcendence) address it directly. If you wonder how real isolation works in shared infrastructure, [Sections 7](#7-multi-tenant-isolation-model) and [8](#8-authorization-and-policy-enforcement) go deep. If you want to understand what "done" looks like in measurable terms, [Section 14](#14-slos-and-success-metrics) defines it precisely.
 
 Read this document once to understand the vision. Read it again before any significant architectural decision.
@@ -1250,8 +1283,11 @@ Observability is part of the platform contract, not an afterthought.
 **Structured log fields on every request path:**
 - `tenantId`
 - `requestId`
+- `correlationId`
 - `schemaVersion`
 - `adapterType`
+
+Distributed tracing should be treated as mandatory from the beginning for request paths that cross API handlers, queues, hooks, and database calls.
 
 This allows debugging, SLO tracking, and cost attribution at tenant granularity rather than only at process or cluster level.
 
@@ -1422,7 +1458,7 @@ sequenceDiagram
   Note over API: 1. Context & Validation
   API->>Config: Get schema & DB config
   Config-->>API: Master Document
-  API->>API: Validate payload (Zod)
+    API->>API: Validate payload (AJV compiled schema)
 
   Note over API, Adapt: 2. Adapter Pattern
   API->>Adapt: execute({ action: 'create', ... })
@@ -1456,6 +1492,7 @@ sequenceDiagram
 - Caches compiled validators per `tenantId:entity:version`
 - Validates every POST/PUT/PATCH body before adapter execution
 - Type coercion: string → number, ISO date parsing
+- Pre-warming hot validators is the intended mitigation against first-request cold starts
 
 ### Phase 5: ABAC Authorization
 
