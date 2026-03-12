@@ -133,7 +133,7 @@ bootstrap: docker-up install typecheck ## ⚡ Initial setup (install deps & type
 #  🐳 DOCKER
 # ============================================
 
-.PHONY: docker-up docker-down docker-logs docker-clean
+.PHONY: docker-up docker-down docker-logs
 
 docker-up: check-compose ## 🐳 Start all containers in background
 	$(call step,$(BLUE)ℹ,Starting Engine containers...)
@@ -146,12 +146,26 @@ docker-down: check-compose ## 🛑 Stop all containers
 docker-logs: check-compose ## 📋 Tail container logs
 	@$(COMPOSE_DEV) logs -f
 
-docker-clean: check-compose ## 🧹 Remove containers and volumes (Warning: destroys data)
+# ============================================
+#  🧹 CLEANUP (42 Style)
+# ============================================
+
+.PHONY: clean fclean re
+
+clean: ## 🧹 Remove build artifacts (dist/)
+	$(call step,$(YELLOW)⚠,Removing build artifacts...)
+	@rm -rf $(APP)/dist
+	$(call step,$(GREEN)✓,Clean complete)
+
+fclean: clean check-compose ## 💥 Full wipe: clean + remove node_modules and DB volumes
 	@echo -e "$(RED)⚠  This will delete all databases and node_modules$(NC)"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	$(call step,$(RED)⚠,Destroying containers and volumes...)
 	@$(COMPOSE_DEV) down -v --remove-orphans
-	@rm -rf $(APP)/node_modules $(APP)/dist
-	$(call step,$(GREEN)✓,Full cleanup done)
+	@rm -rf $(APP)/node_modules
+	$(call step,$(GREEN)✓,Full deep cleanup done)
+
+re: fclean all ## 🔄 Rebuild everything from scratch (fclean + all)
 
 # ============================================
 #  📦 DEPENDENCIES & DEV

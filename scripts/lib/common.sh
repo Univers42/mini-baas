@@ -10,9 +10,9 @@ SCRIPTS_DIR="$(cd "$SCRIPT_LIB_DIR/.." && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPTS_DIR/.." && pwd)"
 
 # The Polyglot Engine is strictly app-only
-BACKEND_PATH="$PROJECT_ROOT/app"
+APP_PATH="$PROJECT_ROOT/app"
 DOCS_PATH="$PROJECT_ROOT/docs"
-ENV_FILE="$BACKEND_PATH/.env"
+ENV_FILE="$APP_PATH/.env"
 
 # ── Docker Container Names (Match docker-compose) ─────
 SYSTEM_DB_CONTAINER="baas-system-db"
@@ -132,7 +132,7 @@ check_file_exists() {
 
 check_package_installed() {
     local pkg="$1"
-    grep -q "\"$pkg\"" "$BACKEND_PATH/package.json" 2>/dev/null
+    grep -q "\"$pkg\"" "$APP_PATH/package.json" 2>/dev/null
 }
 
 check_app_running() {
@@ -179,7 +179,7 @@ require_env() {
 }
 
 # ── Export for subshells ──────────────────────────────
-export PROJECT_ROOT BACKEND_PATH DOCS_PATH ENV_FILE
+export PROJECT_ROOT APP_PATH DOCS_PATH ENV_FILE
 export SYSTEM_DB_CONTAINER TENANT_DB_CONTAINER REDIS_CONTAINER ENGINE_CONTAINER
 export MONGO_CONTAINER POSTGRES_CONTAINER
 export RED GREEN YELLOW BLUE CYAN MAGENTA BOLD DIM NC

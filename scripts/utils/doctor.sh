@@ -64,21 +64,21 @@ check_file() {
     fi
 }
 
-check_file "backend/package.json" "Backend package.json" yes
-check_file "backend/.env.example" "Env template" yes
+check_file "app/package.json" "app package.json" yes
+check_file "app/.env.example" "Env template" yes
 check_file "docker-compose.dev.yml" "Docker compose (Dev)" yes
 check_file "Makefile" "Makefile" yes
 
 # Check for .env 
-if [ -f "backend/.env" ]; then
+if [ -f "app/.env" ]; then
     printf "${GREEN}✓${NC} %-30s found\n" ".env file:"
 else
-    printf "${RED}✗${NC} %-30s missing (Run 'cp backend/.env.example backend/.env')\n" ".env file:"
+    printf "${RED}✗${NC} %-30s missing (Run 'cp app/.env.example app/.env')\n" ".env file:"
     ERRORS=$((ERRORS + 1))
 fi
 
 # Ensure no Prisma pollution
-if [ -d "backend/prisma" ] || grep -q "prisma" "backend/package.json" 2>/dev/null; then
+if [ -d "app/prisma" ] || grep -q "prisma" "app/package.json" 2>/dev/null; then
     printf "${RED}✗${NC} %-30s Found! Must be removed for App Factory architecture.\n" "Prisma traces:"
     ERRORS=$((ERRORS + 1))
 fi
