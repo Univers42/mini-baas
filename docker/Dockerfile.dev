@@ -25,7 +25,7 @@ RUN apk add --no-cache \
 
 # ── Working Directory ────────────────────────────────
 # Pointing directly to the new, clean DDD structure
-WORKDIR /app/backend
+WORKDIR /app/app
 
 # ── Enable pnpm ──────────────────────────────────────
 ENV PNPM_HOME="/pnpm" \

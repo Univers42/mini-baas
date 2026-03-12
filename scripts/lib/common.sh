@@ -9,8 +9,8 @@ SCRIPT_LIB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 SCRIPTS_DIR="$(cd "$SCRIPT_LIB_DIR/.." && pwd)"
 PROJECT_ROOT="$(cd "$SCRIPTS_DIR/.." && pwd)"
 
-# The Polyglot Engine is strictly backend-only
-BACKEND_PATH="$PROJECT_ROOT/backend"
+# The Polyglot Engine is strictly app-only
+BACKEND_PATH="$PROJECT_ROOT/app"
 DOCS_PATH="$PROJECT_ROOT/docs"
 ENV_FILE="$BACKEND_PATH/.env"
 
@@ -135,7 +135,7 @@ check_package_installed() {
     grep -q "\"$pkg\"" "$BACKEND_PATH/package.json" 2>/dev/null
 }
 
-check_backend_running() {
+check_app_running() {
     # Changed to /health to match Phase 0 design
     curl -s "http://localhost:3000/health" &>/dev/null
 }

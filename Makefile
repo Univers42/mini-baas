@@ -39,7 +39,7 @@ COMPOSE_CMD := $(shell \
 # ── Variables ────────────────────────────────────────
 COMPOSE_DEV  := $(COMPOSE_CMD) -f docker-compose.dev.yml
 CONTAINER    := baas-dev-engine
-BACKEND      := backend
+APP      := backend
 HELP_FILTER ?=
 
 # Colors
@@ -83,12 +83,12 @@ ifeq ($(COMPOSE_CMD),__NONE__)
 endif
 
 check-env:
-	@if [ ! -f $(BACKEND)/.env ]; then \
-		if [ -f $(BACKEND)/.env.example ]; then \
+	@if [ ! -f $(APP)/.env ]; then \
+		if [ -f $(APP)/.env.example ]; then \
 			echo -e "  $(YELLOW)⚠$(NC)  .env not found — creating from .env.example"; \
-			cp $(BACKEND)/.env.example $(BACKEND)/.env; \
+			cp $(APP)/.env.example $(APP)/.env; \
 		else \
-			echo -e "$(RED)✗ .env file is missing in $(BACKEND)/$(NC)"; \
+			echo -e "$(RED)✗ .env file is missing in $(APP)/$(NC)"; \
 			exit 1; \
 		fi; \
 	fi
@@ -150,7 +150,7 @@ docker-clean: check-compose ## 🧹 Remove containers and volumes (Warning: dest
 	@echo -e "$(RED)⚠  This will delete all databases and node_modules$(NC)"
 	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
 	@$(COMPOSE_DEV) down -v --remove-orphans
-	@rm -rf $(BACKEND)/node_modules $(BACKEND)/dist
+	@rm -rf $(APP)/node_modules $(APP)/dist
 	$(call step,$(GREEN)✓,Full cleanup done)
 
 # ============================================

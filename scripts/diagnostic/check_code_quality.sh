@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 source "$SCRIPT_DIR/lib/common.sh"
 
 # Default path for the new architecture
-BACKEND_PATH="$SCRIPT_DIR/../backend"
+BACKEND_PATH="$SCRIPT_DIR/../app"
 
 function check_code_quality() {
     log_section "CODE QUALITY CHECK"

@@ -16,14 +16,14 @@ RUN apk add --no-cache python3 g++ make openssl libc6-compat
 ENV PNPM_HOME="/pnpm" PATH="/pnpm:$PATH"
 RUN corepack enable && corepack prepare pnpm@latest --activate
 
-# Copy package files (from the new backend directory)
-COPY backend/package.json backend/pnpm-lock.yaml* ./
+# Copy package files (from the new app directory)
+COPY app/package.json app/pnpm-lock.yaml* ./
 
 # Install ALL dependencies (need nest-cli and typescript for build)
 RUN pnpm install --frozen-lockfile 2>/dev/null || pnpm install
 
 # Copy the DDD source code
-COPY backend/ ./
+COPY app/ ./
 
 # Build the NestJS engine
 RUN pnpm run build

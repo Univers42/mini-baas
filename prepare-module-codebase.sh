@@ -1,7 +1,7 @@
 #!/bin/bash
 # Script para generar la estructura de stubs de la Fase 0
 
-cd backend/src
+cd app/src
 
 # Arrays of modules grouped by their parent directory
 declare -a CONTROL_PLANE_MODULES=("tenant" "metadata" "iam" "provisioner")

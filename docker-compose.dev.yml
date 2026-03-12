@@ -102,9 +102,9 @@ services:
       - "3000:3000"
     volumes:
       # ── Clean Source Code Mount ──
-      - ./backend:/app
+      - ./app:/app
       # ── Named Volumes for Performance ──
-      - backend-modules:/app/node_modules
+      - app-modules:/app/node_modules
       - pnpm-store:/root/.local/share/pnpm/store
       - uploads:/app/uploads
     environment:
@@ -127,7 +127,7 @@ volumes:
   mongo-data:
   pg-data:
   redis-data:
-  backend-modules:
+  app-modules:
   pnpm-store:
   uploads:
 
