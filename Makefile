@@ -40,6 +40,7 @@ COMPOSE_CMD := $(shell \
 COMPOSE_DEV  := $(COMPOSE_CMD) -f docker-compose.dev.yml
 CONTAINER    := baas-dev-engine
 BACKEND      := backend
+HELP_FILTER ?=
 
 # Colors
 BLUE    := \033[0;34m
@@ -228,7 +229,11 @@ reset-db: ## 💥 Destroy all data volumes (Mongo, Postgres, Redis)
 #  ❓ HELP
 # ============================================
 
-help: ## ❓ Show this help message
+help: ## ❓ Show this help message (option: HELP_FILTER=<pattern>)
 	@echo -e "$(BOLD)mini-baas — Available Commands$(NC)"
+	@if [ -n "$(HELP_FILTER)" ]; then \
+		echo -e "$(DIM)Filter: $(HELP_FILTER)$(NC)"; \
+	fi
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+		awk -v filter='$(HELP_FILTER)' 'BEGIN {FS = ":.*?## "; IGNORECASE = 1} \
+			{if (filter == "" || $$1 ~ filter || $$2 ~ filter) printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
