@@ -1,20 +1,16 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { HealthController } from './health.controller';
+import { InfrastructureModule } from './infrastructure/infrastructure.module';
+import { ModulesModule } from './modules/modules.module';
 
 @Module({
   imports: [
-    // Load environment variables globally
     ConfigModule.forRoot({
       isGlobal: true,
     }),
-    
-    // Future imports:
-    // SystemDbModule,
-    // CacheModule,
-    // EnginesModule,
-    // ControlPlaneModule,
-    // DataPlaneModule
+    InfrastructureModule,
+    ModulesModule,
   ],
   controllers: [HealthController],
   providers: [],
