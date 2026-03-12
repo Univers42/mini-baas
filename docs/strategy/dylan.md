@@ -661,6 +661,62 @@ interface MasterDocument {
 
 The Master Document is inherently document-shaped. Using MongoDB for it is not a preference — it's the correct tool.
 
+### MongoDB Pattern Fit for the Control Plane
+
+The Control Plane has to solve three problems at the same time:
+- tenant metadata is heterogeneous
+- schemas evolve in production
+- reads must stay fast at scale
+
+MongoDB fits because its document patterns map directly onto those constraints.
+
+#### 1. Polymorphic Pattern
+
+All tenants live in a single logical `tenants` collection even though their business models differ radically. A bookstore tenant, a trip manager tenant, and an e-commerce tenant can all share the same top-level envelope:
+- `tenantId`
+- `status`
+- `database`
+- `schema`
+- `hooks`
+- `permissions`
+- `version`
+
+What changes is the shape inside `schema`, `hooks`, and `permissions`, not the existence of the Master Document itself. That is the polymorphic pattern in practice: similar documents with different internal structures stored together and retrieved with one query such as `db.tenants.findOne({ tenantId })`.
+
+This matters because tenant context resolution is on the hot path. A relational decomposition into `tenants`, `tenant_schemas`, `tenant_fields`, `tenant_hooks`, and `tenant_permissions` would force repeated joins just to rebuild the same runtime object that MongoDB can return in one read.
+
+#### 2. Schema Versioning Pattern
+
+Versioned Master Documents are expected to coexist. Tenant A may still be effectively on v1 while Tenant B already uses v3 with billing metadata, new entities, and additional hooks. MongoDB handles this naturally because documents do not need to be identical to coexist in one collection.
+
+That enables:
+- version-tagged metadata changes
+- lazy migration of old documents when accessed
+- instant rollback by switching the active version pointer rather than rewriting the entire storage model
+
+This is exactly the kind of evolution the Control Plane needs: change without downtime and without forcing every tenant to migrate simultaneously.
+
+#### 3. Schema Validation at the Database Boundary
+
+MongoDB is not "schemaless" in the sense of having no integrity controls. For the Control Plane, that distinction matters. The `tenants` collection can enforce JSON Schema validation so malformed Master Documents never reach the Data Plane.
+
+In practice, that means base rules for all versions can be enforced at the database layer:
+- `tenantId` follows a strict format
+- `status` stays within the allowed lifecycle enum
+- `database.engine` stays within the supported engines
+
+And version-specific rules can be layered on top with `oneOf` or equivalent validator composition so older and newer documents coexist safely. This gives the Control Plane a last line of defense even if the application layer has a bug.
+
+#### Pattern Synergy
+
+The MongoDB story for the Control Plane is not one pattern in isolation:
+- **Polymorphic** keeps all tenant metadata addressable with one collection and one lookup path.
+- **Schema Versioning** allows those documents to evolve independently.
+- **Schema Validation** prevents malformed metadata from entering the system.
+- **Computed** and **Approximation** patterns, covered later in the roadmap, make billing and telemetry reads fast without putting aggregation cost on the request path.
+
+That combination is the real reason MongoDB is the correct Control Plane database here: it optimizes for governance metadata, not for tenant business records.
+
 ---
 
 ## System Entity Model
