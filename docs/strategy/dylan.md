@@ -257,6 +257,22 @@ graph TD
 	class DB1,DB2 databaseIsolated;
 ```
 
+#### Isolation Strategy by Tier
+
+mini-baas supports multiple isolation models and chooses among them deliberately rather than pretending one model fits every tenant:
+
+| Model | Shape | Strength | Tradeoff | Best Fit |
+|---|---|---|---|---|
+| **Shared DB + Shared Schema** | One set of tables with `tenantId` filtering | Lowest infrastructure cost | Highest blast radius if filtering logic fails | Small/internal tenants only |
+| **Shared DB + Separate Schemas** | One database, one schema per tenant | Stronger logical isolation | More schema orchestration overhead | Growing SaaS tenants |
+| **Database per Tenant** | One database per tenant | Strong data isolation and easy export/delete | More operational and connection cost | Enterprise and regulated tenants |
+| **Cluster/Namespace per Tenant** | Dedicated compute and network boundary | Strongest isolation | Highest cost and orchestration complexity | Premium isolation tiers |
+
+The recommended production posture is hybrid:
+- Small tenants use shared infrastructure with strict tenant scoping.
+- Enterprise tenants use dedicated databases and, when required, dedicated compute boundaries.
+- Cache keys are always tenant namespaced, for example `tenant:ws_123:entity:orders:page:1`.
+
 
 ### 4. Convention Over Configuration, Configuration Over Code
 
@@ -401,6 +417,24 @@ graph TB
 | **Engine Layer** | Database abstraction, connection pooling, query translation | [Knex.js](https://knexjs.org/) + [MongoDB Node Driver](https://www.mongodb.com/docs/drivers/node/current/) |
 | **Data Plane** | Dynamic API, validation, auth, sessions, all modules | Tenant's own database (any engine) |
 
+### Control Plane Resilience Rule
+
+Control Plane failure must not immediately break Data Plane execution for already-known tenants. That requires:
+- Tenant metadata to be cached in Redis by tenant and version.
+- Compiled policy snapshots to remain locally available for active tenants.
+- Adapter connection settings to be cacheable and refreshable without re-provisioning.
+
+This keeps governance centralized while preserving runtime availability when the metadata store is temporarily degraded.
+
+### Caching Strategy
+
+mini-baas uses three distinct caches, each tenant-scoped:
+- **Metadata Cache** for the Master Document and activation state.
+- **Compiled Validator Cache** for AJV validators keyed by `tenantId:entity:version`.
+- **Query Result Cache** as an optional acceleration layer for read-heavy endpoints.
+
+All cache entries are TTL-controlled, tenant namespaced, and invalidated on schema version changes.
+
 ---
 
 ## The Polyglot Engine — How It Works
@@ -512,6 +546,18 @@ Every database engine maps its native types to a universal set:
 | `uuid` | `UUID` | `CHAR(36)` | `String` | `TEXT` |
 | `json` | `JSONB` | `JSON` | `Object` | `TEXT` |
 | `array` | `JSONB` | `JSON` | `Array` | `TEXT` |
+
+### Consistency Guarantees
+
+mini-baas must never promise guarantees stronger than the weakest supported engine can actually enforce.
+
+| Feature | SQL Engines | MongoDB | Platform Guarantee |
+|---|---|---|---|
+| Transactions | ACID | Limited / scope-dependent | Best effort, adapter-aware |
+| Strong consistency | Yes | Yes for single-document operations | Engine-dependent |
+| Cross-engine joins | Native within one SQL engine | Not applicable in the same way | Not supported across engines |
+
+This is why the abstraction layer expresses intent, not impossible uniformity. Relational joins, multi-entity transactions, and strict consistency rules are exposed only where the target engine can honor them.
 
 ---
 
@@ -1191,6 +1237,32 @@ flowchart TD
     style EXEC fill:#9b59b6,color:#fff
 ```
 
+### Tenant-Aware Observability
+
+Observability is part of the platform contract, not an afterthought.
+
+**Metrics captured per tenant:**
+- p95 latency
+- error rate
+- query volume
+- storage usage
+
+**Structured log fields on every request path:**
+- `tenantId`
+- `requestId`
+- `schemaVersion`
+- `adapterType`
+
+This allows debugging, SLO tracking, and cost attribution at tenant granularity rather than only at process or cluster level.
+
+### Failure Domain Rules
+
+mini-baas is intentionally designed so that failures stay local whenever possible:
+- A tenant database outage should affect only that tenant.
+- A hook crash must not crash the worker or API process.
+- Control Plane downtime should not break tenants already present in cache.
+- Redis loss should degrade performance and rate-limit precision before it degrades correctness.
+
 ---
 
 ## Technology Stack
@@ -1778,9 +1850,12 @@ Async task queue using [BullMQ](https://docs.bullmq.io/) + [Redis](https://redis
 ### Phase 10: Billing & Usage Metering
 
 - Usage event emission from Data Plane: `{ tenantId, eventType, unitsConsumed, timestamp }`
+- Canonical event types include `read`, `write`, `storage`, and `hook_cpu`
 - Billing aggregator in Control Plane
 - Tier enforcement (request limits, storage limits, entity count limits)
 - Schema versioning endpoints: `GET /_schema/versions`, `POST /_schema/rollback/:version`
+
+Billing is intentionally off the request path: the Data Plane emits usage events, and the Control Plane aggregates them asynchronously. Request handling should never block on billing computation.
 
 
 #### ***Pattern Diagram***
@@ -1870,6 +1945,56 @@ Validate the entire BaaS with a real application:
 - Generate a `UniversalSchemaMap` from the introspected schema
 - Create a tenant Master Document with engine `postgresql`
 - Verify all CRUD operations work through `DynamicController` with zero hardcoded routes
+
+### Operational Deployment Topology
+
+The baseline production deployment separates control and execution concerns at the infrastructure level as well:
+
+```text
+Kubernetes Cluster
+├── control-plane namespace
+├── data-plane namespace
+├── redis
+└── monitoring stack
+```
+
+Enterprise isolation tiers can add:
+- Dedicated namespace per tenant
+- Dedicated database per tenant
+- Separate autoscaling group or node pool for premium workloads
+- NetworkPolicy and secret boundaries per tenant environment
+
+### Governance and Enforced Limits
+
+Governance in mini-baas means the platform can automatically enforce safety, fairness, and predictability rather than depending on convention.
+
+Every tenant should have enforceable limits for:
+- Maximum entities
+- Maximum fields per entity
+- Maximum payload size
+- Maximum hook CPU / execution budget
+- Maximum requests per minute
+
+These rules belong in the Control Plane and are enforced in the gateway and Data Plane.
+
+### System Maturity Stages
+
+The platform evolves in explicit stages:
+- **Stage 1** — Logical multi-tenancy
+- **Stage 2** — Query DSL + policy injection
+- **Stage 3** — Versioned metadata
+- **Stage 4** — Billing + quotas
+- **Stage 5** — Enterprise isolation tiers
+
+### Non-Negotiable Principles
+
+1. Metadata is the source of truth.
+2. Isolation must exist at every layer.
+3. Control Plane and Data Plane must remain separable.
+4. The platform must not claim guarantees stronger than the weakest supported engine.
+5. Every feature must be tenant-aware.
+6. Performance must be cache-driven where repetition exists.
+7. Governance must be enforceable automatically, not socially.
 
 ---
 
