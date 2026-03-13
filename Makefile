@@ -69,6 +69,37 @@ NC      := \033[0m
 BOLD    := \033[1m
 DIM     := \033[2m
 
+# ── Abstract Filter System ───────────────────────────────────────────────
+# Two filtering modes, both activated via make variables:
+#
+#  FILTER  — filter which targets appear in `make help`
+#             Examples:
+#               make help FILTER=docker        → only docker-* targets
+#               make help FILTER=db            → only db-* targets
+#               make help FILTER="test|lint"   → test and lint targets
+#
+#  VERBOSE — grep-filter the combined stdout+stderr of any make rule
+#             Examples:
+#               make <target> VERBOSE=<pattern>  → lines matching pattern
+#               make <target> VERBOSE=1          → full output (no filter)
+#
+# $(V) — explicit opt-in pipe suffix for individual recipes:
+#   @some-long-command $(V)
+#
+# filter — meta-target to wrap any TARGET's output through GREP:
+#   make filter TARGET=docker-logs GREP=error
+# ─────────────────────────────────────────────────────────────────────────
+FILTER              ?=
+VERBOSE             ?=
+
+ifeq ($(VERBOSE),)
+  V :=
+else ifeq ($(VERBOSE),1)
+  V :=
+else
+  V := 2>&1 | grep -iE "$(VERBOSE)" || true
+endif
+
 # Box drawing
 define BANNER
 	@echo ""
@@ -705,15 +736,52 @@ info:  ## 🩺 Show detected environment
 #  ❓ HELP
 # ============================================
 
+# ── make filter ──────────────────────────────────────────────────────────
+# Wrap any target's combined stdout+stderr through grep.
+# More explicit alternative to VERBOSE= for one-shot filtering.
+#
+# Usage:
+#   make filter TARGET=docker-logs GREP=error
+#   make filter TARGET=test        GREP="PASS|FAIL"
+#   make filter TARGET=audit       GREP=vulnerability
+# ─────────────────────────────────────────────────────────────────────────
+TARGET ?=
+GREP   ?=
+
+.PHONY: filter
+filter:  ## 🔍 Pipe any target's output through grep  (make filter TARGET=<rule> GREP=<pattern>)
+	@if [ -z "$(TARGET)" ]; then \
+		echo ""; \
+		echo -e "$(RED)┌─────────────────────────────────────────────────────────┐$(NC)"; \
+		echo -e "$(RED)│  ✗  TARGET is required$(NC)"; \
+		echo -e "$(RED)├─────────────────────────────────────────────────────────┤$(NC)"; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Usage:$(NC)  make filter TARGET=<rule> GREP=<pattern>"; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Examples:$(NC)"; \
+		echo -e "$(RED)│$(NC)    make filter TARGET=docker-logs GREP=error"; \
+		echo -e "$(RED)│$(NC)    make filter TARGET=test        GREP=\"PASS|FAIL\""; \
+		echo -e "$(RED)└─────────────────────────────────────────────────────────┘$(NC)"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@$(MAKE) --no-print-directory $(TARGET) 2>&1 \
+		$(if $(GREP),| grep -iE "$(GREP)" || true,)
+
 help:  ## ❓ Show this help message
 	@echo ""
 	@echo -e "$(BOLD)Transcendence — Available Commands$(NC)"
 	@echo -e "$(DIM)Compose: $(COMPOSE_CMD) $(COMPOSE_VERSION)$(NC)"
+	@if [ -n "$(FILTER)" ]; then \
+		echo -e "$(DIM)Filter:  $(CYAN)$(FILTER)$(NC)"; \
+	fi
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+		$(if $(FILTER),grep -iE "$(FILTER)" |,) \
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 	@echo ""
 	@echo -e "  $(DIM)First time? Run: make doctor$(NC)"
+	@if [ -n "$(FILTER)" ]; then \
+		echo -e "  $(DIM)Tip: $(BOLD)make help$(NC)$(DIM) to see all targets (no filter)$(NC)"; \
+	fi
 	@echo ""
 
 # ============================================
@@ -724,3 +792,42 @@ help:  ## ❓ Show this help message
 convert_subject_pdf:  ## Convert static_docs/subject.md → static_docs/subject.pdf using md-to-pdf
 	@echo "Converting static_docs/subject.md → static_docs/subject.pdf"
 	@bash vendor/scripts/md-to-pdf/convert.sh static_docs/subject.md static_docs/subject.pdf
+
+# ============================================
+#  🔍 VERBOSE — output filter meta-target
+# ============================================
+#
+# Transparent grep-filter wrapper for any make rule.
+# This is the abstract VERBOSE mode: one target, any rule, no recipe edits.
+#
+# Usage:
+#   make verbose TARGET=<rule> VERBOSE=<pattern>
+#   make verbose TARGET=docker-logs VERBOSE=nginx
+#   make verbose TARGET=test        VERBOSE="PASS|FAIL"
+#   make verbose TARGET=audit       VERBOSE=error
+#
+# The $(V) variable provides an inline opt-in suffix for individual recipes:
+#   @some-command $(V)
+# ─────────────────────────────────────────────────────────────────────────
+.PHONY: verbose
+verbose:  ## 🔍 Run any target with output filtered (make verbose TARGET=<rule> VERBOSE=<pattern>)
+	@if [ -z "$(TARGET)" ]; then \
+		echo ""; \
+		echo -e "$(RED)┌─────────────────────────────────────────────────────────┐$(NC)"; \
+		echo -e "$(RED)│  ✗  TARGET is required$(NC)"; \
+		echo -e "$(RED)├─────────────────────────────────────────────────────────┤$(NC)"; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Usage:$(NC)  make verbose TARGET=<rule> VERBOSE=<pattern>"; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Examples:$(NC)"; \
+		echo -e "$(RED)│$(NC)    make verbose TARGET=docker-logs VERBOSE=nginx"; \
+		echo -e "$(RED)│$(NC)    make verbose TARGET=test        VERBOSE=\"PASS|FAIL\""; \
+		echo -e "$(RED)│$(NC)    make verbose TARGET=audit       VERBOSE=error"; \
+		echo -e "$(RED)└─────────────────────────────────────────────────────────┘$(NC)"; \
+		echo ""; \
+		exit 1; \
+	fi
+	@_PATTERN="$(or $(VERBOSE),$(GREP))"; \
+	if [ -z "$$_PATTERN" ] || [ "$$_PATTERN" = "1" ]; then \
+		$(MAKE) --no-print-directory $(TARGET); \
+	else \
+		$(MAKE) --no-print-directory $(TARGET) 2>&1 | grep -iE "$$_PATTERN" || true; \
+	fi
