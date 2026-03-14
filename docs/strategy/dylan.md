@@ -1889,7 +1889,7 @@ mini-baas is intentionally designed so that failures stay local whenever possibl
 ┌─────────────────────────────────────────────────────┐
 │  Docker Compose Development Stack                   │
 ├──────────────┬──────────────────────────────────────┤
-│  mongodb     │  MongoDB 7 (Control Plane)    :27017 │
+│  mongodb     │  MongoDB 7 (Control Plane)    :27117 │
 │  db          │  PostgreSQL 16 (Default SQL)  :5432  │
 │  redis       │  Redis 7 (Cache + Pub/Sub)    :6379  │
 │  mailpit     │  Mailpit (Email catcher)      :8025  │

@@ -93,7 +93,7 @@ check-env:
 	fi
 
 check-ports:
-	@PORTS="3000 27017 5432 6379 8025"; \
+	@PORTS="3000 27117 5432 6379 8025"; \
 	BLOCKED=""; \
 	for p in $$PORTS; do \
 		if ss -tlnp 2>/dev/null | grep -q ":$$p "; then \
@@ -114,6 +114,9 @@ preflight: check-docker check-compose check-env check-ports
 .PHONY: all bootstrap banner
 
 all: banner preflight bootstrap dev ## 🚀 Full setup (preflight, bootstrap, start dev server)
+
+update:
+	@git submodule update --init --recursive --remote --merge 2>/dev/null || echo "All up to date"
 
 banner:
 	$(BANNER)
@@ -142,8 +145,28 @@ docker-down: check-compose ## 🛑 Stop all containers
 	$(call step,$(YELLOW)⚠,Stopping Engine...)
 	@$(COMPOSE_DEV) down
 
-docker-logs: check-compose ## 📋 Tail container logs
+docker-logs: check-compose  ## 🐳 Tail all container logs
 	@$(COMPOSE_DEV) logs -f
+
+docker-ps: check-compose  ## 🐳 Show running containers
+	@$(COMPOSE_DEV) ps
+
+docker-images: check-compose  ## 🐳 Show built images
+	@$(COMPOSE_DEV) images
+
+docker-clean: check-compose  ## 🐳 Remove containers + volumes (full reset)
+	@echo -e "$(RED)⚠  This will delete all data (database, node_modules, cache)$(NC)"
+	@read -p "Are you sure? [y/N] " confirm && [ "$$confirm" = "y" ] || exit 1
+	@$(COMPOSE_DEV) down -v --remove-orphans 2>/dev/null || { \
+		echo -e "$(YELLOW)⚠$(NC)  Compose down failed (AppArmor?). Force-removing containers..."; \
+		docker rm -f $$(docker ps -aq --filter "name=transcendence") 2>/dev/null || true; \
+		docker volume rm $$(docker volume ls -q --filter "name=transcendance") 2>/dev/null || true; \
+	}
+	$(call step,$(GREEN)✓,Full cleanup done)
+
+docker-fclean: docker-clean  ## 🐳 Full clean + prune unused Docker resources
+	@docker system prune -af --volumes 2>/dev/null || true
+	$(call step,$(GREEN)✓,Docker system pruned)
 
 # ============================================
 #  🧹 CLEANUP (42 Style)
@@ -176,7 +199,7 @@ install: ## 📦 Install Node.js dependencies inside container
 	$(call step,$(BLUE)ℹ,Installing BaaS dependencies...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm install"
 
-dev: docker-up ## 🔥 Start hot-reload development server
+dev: install docker-up ## 🔥 Start hot-reload development server
 	$(call step,$(BLUE)ℹ,Starting hot-reload engine...)
 	@docker exec -it $(CONTAINER) sh -c "cd /app && pnpm run start:dev"
 
@@ -211,7 +234,7 @@ typecheck: ## 🏗️ Run TypeScript compiler check (no output)
 kill-ports: ## 🔌 Free up ports used by the project
 	$(call step,$(YELLOW)⚠,Freeing ports...)
 	@$(COMPOSE_DEV) down 2>/dev/null || true
-	@for p in 3000 27017 5432 6379 8025; do \
+	@for p in 3000 27117 5432 6379 8025; do \
 		PIDS=$$(lsof -t -i :$$p 2>/dev/null || true); \
 		if [ -n "$$PIDS" ]; then kill -9 $$PIDS 2>/dev/null || sudo kill -9 $$PIDS 2>/dev/null || true; fi; \
 	done

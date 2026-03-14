@@ -453,7 +453,7 @@ NODE_ENV=development
 CORS_ORIGIN=*
 
 # Control Plane Database (MongoDB — system, not tenants)
-MONGODB_URI=mongodb://localhost:27017
+MONGODB_URI=mongodb://localhost:27117
 MONGODB_DB_NAME=mini_baas_control
 
 # Cache

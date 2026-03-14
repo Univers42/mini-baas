@@ -84,9 +84,9 @@ jobs:
       system-db:
         image: mongo:7
         ports:
-          - 27017:27017
+          - 27117:27117
         options: >-
-          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
+          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27117/test --quiet"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
@@ -137,7 +137,7 @@ jobs:
       - name: Run unit tests
         run: cd app && pnpm test
         env:
-          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_URI: mongodb://localhost:27117
           MONGODB_DB_NAME: mini_baas_control_test
           TENANT_DB_HOST: localhost
           TENANT_DB_PORT: 5432
@@ -151,7 +151,7 @@ jobs:
       - name: Run E2E tests
         run: cd app && pnpm run test:e2e
         env:
-          MONGODB_URI: mongodb://localhost:27017
+          MONGODB_URI: mongodb://localhost:27117
           MONGODB_DB_NAME: mini_baas_control_test
           TENANT_DB_HOST: localhost
           TENANT_DB_PORT: 5432

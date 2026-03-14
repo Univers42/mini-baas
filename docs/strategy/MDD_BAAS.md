@@ -163,7 +163,7 @@ Most backends are static. **Our backend has zero knowledge of any user's data mo
   "status": "active",
   "database": {
     "engine": "mongodb",
-    "uri": "mongodb://user:pass@db.example.com:27017/tenant_db"
+    "uri": "mongodb://user:pass@db.example.com:27117/tenant_db"
   },
   "schema": {
     "books": {

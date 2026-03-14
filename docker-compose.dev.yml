@@ -19,7 +19,7 @@ services:
     container_name: baas-system-db
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "27117:27017"
     volumes:
       - mongo-data:/data/db
     healthcheck:

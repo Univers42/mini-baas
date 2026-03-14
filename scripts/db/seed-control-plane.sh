@@ -30,14 +30,14 @@ fi
 echo -e "${CYAN}ℹ Injecting test tenant 'vite-gourmand' into MongoDB...${NC}"
 
 # We use mongosh inside the container to insert the Master Document
-docker exec -i $CONTAINER mongosh "mongodb://localhost:27017/$DB_NAME" --quiet <<EOF
+docker exec -i $CONTAINER mongosh "mongodb://localhost:27117/$DB_NAME" --quiet <<EOF
 db.tenantmetadata.deleteMany({ tenantId: "vite-gourmand" });
 db.tenantmetadata.insertOne({
   tenantId: "vite-gourmand",
   status: "active",
   database: {
     engine: "mongodb",
-    uri: "mongodb://baas-system-db:27017/tenant_vite_gourmand"
+    uri: "mongodb://baas-system-db:27117/tenant_vite_gourmand"
   },
   schema: {
     books: {

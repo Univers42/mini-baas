@@ -99,7 +99,7 @@ This allows rollback: if a schema migration breaks something, the admin can do `
 The strategic document defines exactly the four required services:
 
 ```
-mongodb   → MongoDB 7     → Control Plane DB          :27017
+mongodb   → MongoDB 7     → Control Plane DB          :27117
 db        → PostgreSQL 16 → Default SQL Tenant        :5432
 redis     → Redis 7       → Cache + rate limit state  :6379
 mailpit   → Mailpit       → Email catcher dev         :1025/:8025
@@ -164,7 +164,7 @@ import { ConfigService } from '@nestjs/config';
     MongooseModule.forRootAsync({
       inject: [ConfigService],
       useFactory: (config: ConfigService) => ({
-        uri: config.get<string>('MONGODB_URI', 'mongodb://localhost:27017'),
+        uri: config.get<string>('MONGODB_URI', 'mongodb://localhost:27117'),
         dbName: config.get<string>('MONGODB_DB_NAME', 'mini_baas_control'),
         // Robust connection options for production
         serverSelectionTimeoutMS: 5000,
@@ -1184,7 +1184,7 @@ services:
     container_name: mini-baas-mongodb
     restart: unless-stopped
     ports:
-      - '27017:27017'
+      - '27117:27117'
     environment:
       MONGO_INITDB_DATABASE: mini_baas_control
     volumes:
@@ -1274,8 +1274,8 @@ NODE_ENV=development
 CORS_ORIGIN=*
 
 # ─── Control Plane Database (MongoDB) ──────────────────────────────────────
-# Docker: mongodb://localhost:27017
-MONGODB_URI=mongodb://localhost:27017
+# Docker: mongodb://localhost:27117
+MONGODB_URI=mongodb://localhost:27117
 MONGODB_DB_NAME=mini_baas_control
 
 # ─── Cache (Redis) ──────────────────────────────────────────────────────────

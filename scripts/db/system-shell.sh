@@ -20,4 +20,4 @@ if ! docker ps | grep -q $CONTAINER; then
 fi
 
 # Execute mongosh inside the container
-docker exec -it $CONTAINER mongosh "mongodb://localhost:27017/$DB_NAME"
+docker exec -it $CONTAINER mongosh "mongodb://localhost:27117/$DB_NAME"
