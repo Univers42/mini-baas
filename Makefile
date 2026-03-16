@@ -40,6 +40,8 @@ COMPOSE_CMD := $(shell \
 COMPOSE_DEV		:= $(COMPOSE_CMD) -f docker-compose.dev.yml
 CONTAINER		:= baas-dev-engine
 APP				:= app
+FILTER          ?=
+LOG_LEVEL       ?= debug
 
 # Colors
 BLUE    := \033[0;34m
@@ -193,15 +195,15 @@ re: fclean all ## 🔄 Rebuild everything from scratch (fclean + all)
 #  📦 DEPENDENCIES & DEV
 # ============================================
 
-.PHONY: install dev shell
+.PHONY: install dev shell ensure-backend-deps
 
 install: docker-up ## 📦 Install Node.js dependencies inside container
 	$(call step,$(BLUE)ℹ,Installing BaaS dependencies...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm install"
 
-dev: docker-up install ## 🔥 Start hot-reload development server
-	$(call step,$(BLUE)ℹ,Starting hot-reload engine...)
-	@docker exec -it $(CONTAINER) sh -c "cd /app && pnpm run start:dev"
+dev: docker-up install ## 🔥 Start hot-reload development server (LOG_LEVEL=debug|error|warn)
+	$(call step,$(BLUE)ℹ,Starting hot-reload engine [LOG_LEVEL=$(LOG_LEVEL)]...)
+	@docker exec -it -e LOG_LEVEL=$(LOG_LEVEL) $(CONTAINER) sh -c "cd /app && pnpm run start:dev"
 
 shell: ## 🐚 Open interactive bash shell inside dev container
 	@docker exec -it $(CONTAINER) bash
@@ -286,14 +288,14 @@ reset-db: ## 💥 Destroy all data volumes (Mongo, Postgres, Redis)
 
 test: test-unit test-e2e  ## 🧪 Run all tests
 
-test-unit: ensure-backend-deps  ## 🧪 Run unit tests
+test-unit: ensure-backend-deps  ## 🧪 Run unit tests (LOG_LEVEL=error)
 	$(call step,$(BLUE)ℹ,Running unit tests...)
-	@$(COMPOSE_DEV) exec -T engine sh -c "cd /app && pnpm test"
+	@$(COMPOSE_DEV) exec -e LOG_LEVEL=$(LOG_LEVEL) -T engine sh -c "cd /app && pnpm test"
 	$(call step,$(GREEN)✓,Unit tests passed)
 
-test-e2e: ensure-backend-deps  ## 🧪 Run E2E tests
+test-e2e: ensure-backend-deps  ## 🧪 Run E2E tests (LOG_LEVEL=error)
 	$(call step,$(BLUE)ℹ,Running E2E tests...)
-	@$(COMPOSE_DEV) exec -T engine sh -c "cd /app && pnpm run test:e2e"
+	@$(COMPOSE_DEV) exec -e LOG_LEVEL=$(LOG_LEVEL) -T engine sh -c "cd /app && pnpm run test:e2e"
 	$(call step,$(GREEN)✓,E2E tests passed)
 
 test-watch:  ## 🧪 Run tests in watch mode
@@ -303,21 +305,21 @@ test-watch:  ## 🧪 Run tests in watch mode
 #  ❓ HELP
 # ============================================
 
-help: ## ❓ Show categories
+help: ## ❓ Show all commands or search (use FILTER="keyword")
 	@echo -e "$(BOLD)mini-baas — Command Manual$(NC)"
-	@echo -e "Use $(CYAN)make help-<category>$(NC) to view specific commands."
+	@echo -e "Usage: $(CYAN)make <target>$(NC)"
+	@echo -e "Search: $(CYAN)make help FILTER=<keyword>$(NC)"
 	@echo ""
-	@echo -e "$(DIM)CATEGORIES:$(NC)"
-	@echo -e "  $(GREEN)bootstrap$(NC)  ⚡ Engine initialization and setup"
-	@echo -e "  $(GREEN)docker$(NC)     🐳 Container lifecycle (up, down, logs)"
-	@echo -e "  $(GREEN)clean$(NC)      🧹 System resets and artifact removal"
-	@echo -e "  $(GREEN)dev$(NC)        📦 Development tools and shells"
-	@echo -e "  $(GREEN)check$(NC)      ✅ Code quality, formatting, and typing"
-	@echo -e "  $(GREEN)port$(NC)       🔌 Network and port management"
-	@echo -e "  $(GREEN)script$(NC)     🩺 Diagnostics, tests, and DB seeds"
-	@echo -e "  $(GREEN)all$(NC)        📜 Show every available command"
-	@echo ""
-	@echo -e "$(DIM)Examples: make help-docker | make help-all$(NC)"
+	@if [ -z "$(FILTER)" ]; then \
+		echo -e "$(BOLD)Available Commands:$(NC)"; \
+		grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+			awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'; \
+	else \
+		echo -e "$(BOLD)Commands matching: $(CYAN)'$(FILTER)'$(NC)"; \
+		grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
+			awk -v filter="$(FILTER)" 'BEGIN {FS = ":.*?## "; IGNORECASE = 1} \
+				{if ($$1 ~ filter || $$2 ~ filter) printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'; \
+	fi
 
 help-all: ## ❓ Show all commands
 	@echo -e "$(BOLD)mini-baas — All Commands$(NC)"
@@ -326,8 +328,8 @@ help-all: ## ❓ Show all commands
 		awk 'BEGIN {FS = ":.*?## "}; {printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
 
 help-%: ## ❓ Show commands for a specific category
-	@echo -e "$(BOLD)mini-baas — Commands matching: $(CYAN)$*$(NC)"
+	@echo -e "$(BOLD)mini-baas — Commands matching category: $(CYAN)$*$(NC)"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
-		awk -v filter="$*" 'BEGIN {FS = ":.*?## "; IGNORECASE = 1} \
-			{if ($$1 ~ filter || $$2 ~ filter) printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
+		awk -v filter="^$*" 'BEGIN {FS = ":.*?## "; IGNORECASE = 1} \
+			{if ($$1 ~ filter) printf "  $(GREEN)%-20s$(NC) %s\n", $$1, $$2}'
