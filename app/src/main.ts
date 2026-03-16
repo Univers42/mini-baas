@@ -41,7 +41,11 @@ async function bootstrap() {
   });
 
   // ── Swagger API Documentation Setup ──
-  if (config.get('SWAGGER_ENABLED') === 'true') {
+  const swaggerEnabled = /^(true|1|yes|on)$/i.test(
+    String(config.get('SWAGGER_ENABLED', 'false')),
+  );
+
+  if (swaggerEnabled) {
     const swaggerConfig = new DocumentBuilder()
       .setTitle('mini-baas Engine')
       .setDescription('Metadata-driven polyglot Backend-as-a-Service')
@@ -56,6 +60,8 @@ async function bootstrap() {
 
   await app.listen(port);
   Logger.log(`mini-baas running on port ${port}`, 'Bootstrap');
-  Logger.log(`Swagger Docs: http://localhost:${port}/docs`, 'Bootstrap');
+  if (swaggerEnabled) {
+    Logger.log(`Swagger Docs: http://localhost:${port}/docs`, 'Bootstrap');
+  }
 }
 bootstrap();
