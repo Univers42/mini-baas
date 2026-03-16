@@ -206,6 +206,21 @@ dev: docker-up install ## 🔥 Start hot-reload development server
 shell: ## 🐚 Open interactive bash shell inside dev container
 	@docker exec -it $(CONTAINER) bash
 
+ensure-backend-deps:
+	$(call step,$(BLUE)ℹ,Ensuring backend dependencies are installed...)
+	@$(COMPOSE_DEV) exec -T engine sh -c "cd /app && if [ ! -d node_modules/@nestjs/common ] || [ ! -x node_modules/.bin/jest ]; then pnpm install --prod=false; fi" 2>&1 || { \
+		echo ""; \
+		echo -e "$(RED)┌─────────────────────────────────────────────────────────┐$(NC)"; \
+		echo -e "$(RED)│  ✗  FAILED: $(BOLD)backend dependency check$(NC)"; \
+		echo -e "$(RED)├─────────────────────────────────────────────────────────┤$(NC)"; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Why:$(NC)  Could not access/install backend dependencies"; \
+		echo -e "$(RED)│$(NC)        in compose service 'engine' (/app)."; \
+		echo -e "$(RED)│$(NC)  $(BOLD)Fix:$(NC)  make docker-clean && make dev"; \
+		echo -e "$(RED)└─────────────────────────────────────────────────────────┘$(NC)"; \
+		echo ""; \
+		exit 1; \
+	}
+
 # ============================================
 #  ✅ QUALITY & PHASE 0 CHECKS
 # ============================================
@@ -215,6 +230,8 @@ shell: ## 🐚 Open interactive bash shell inside dev container
 lint: ## 🔍 Run ESLint on the codebase
 	$(call step,$(BLUE)ℹ,Running ESLint...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm exec eslint . 2>/dev/null || true"
+	$(call step,$(GREEN)✓,Lint complete)
+
 
 format: ## ✨ Run Prettier to format code
 	$(call step,$(BLUE)ℹ,Running Prettier...)
@@ -260,6 +277,27 @@ seed-system: ## 🧠 Inject test Master Document into MongoDB
 
 reset-db: ## 💥 Destroy all data volumes (Mongo, Postgres, Redis)
 	@bash scripts/db/reset.sh
+
+# ============================================
+#  🧪 TESTING
+# ============================================
+
+.PHONY: test test-unit test-e2e test-watch
+
+test: test-unit test-e2e  ## 🧪 Run all tests
+
+test-unit: ensure-backend-deps  ## 🧪 Run unit tests
+	$(call step,$(BLUE)ℹ,Running unit tests...)
+	@$(COMPOSE_DEV) exec -T engine sh -c "cd /app && pnpm test"
+	$(call step,$(GREEN)✓,Unit tests passed)
+
+test-e2e: ensure-backend-deps  ## 🧪 Run E2E tests
+	$(call step,$(BLUE)ℹ,Running E2E tests...)
+	@$(COMPOSE_DEV) exec -T engine sh -c "cd /app && pnpm run test:e2e"
+	$(call step,$(GREEN)✓,E2E tests passed)
+
+test-watch:  ## 🧪 Run tests in watch mode
+	@$(COMPOSE_DEV) exec engine sh -c "cd /app && pnpm run test:watch"
 
 # ============================================
 #  ❓ HELP
