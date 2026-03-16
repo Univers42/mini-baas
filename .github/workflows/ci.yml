@@ -84,9 +84,9 @@ jobs:
       system-db:
         image: mongo:7
         ports:
-          - 27117:27117
+          - 27117:27017
         options: >-
-          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27117/test --quiet"
+          --health-cmd "echo 'db.runCommand(\"ping\").ok' | mongosh localhost:27017/test --quiet"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
