@@ -80,10 +80,6 @@ async function bootstrap() {
     SwaggerModule.setup('docs', app, document);
   }
 
-  Logger.debug('Esto es un mensaje de DEBUG', 'Prueba');
-  Logger.log('Esto es un mensaje de LOG', 'Prueba');
-  Logger.warn('Esto es un mensaje de WARN', 'Prueba');
-  Logger.error('Esto es un mensaje de ERROR', 'Prueba');
   await app.listen(port);
   Logger.log(`mini-baas running on port ${port}`, 'Bootstrap');
   if (swaggerEnabled) {
