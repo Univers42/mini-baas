@@ -39,7 +39,7 @@ COMPOSE_CMD := $(shell \
 # ── Variables ────────────────────────────────────────
 COMPOSE_DEV		:= $(COMPOSE_CMD) -f docker-compose.dev.yml
 CONTAINER		:= baas-dev-engine
-APP				:= backend
+APP				:= app
 
 # Colors
 BLUE    := \033[0;34m
@@ -195,11 +195,11 @@ re: fclean all ## 🔄 Rebuild everything from scratch (fclean + all)
 
 .PHONY: install dev shell
 
-install: ## 📦 Install Node.js dependencies inside container
+install: docker-up ## 📦 Install Node.js dependencies inside container
 	$(call step,$(BLUE)ℹ,Installing BaaS dependencies...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm install"
 
-dev: install docker-up ## 🔥 Start hot-reload development server
+dev: docker-up install ## 🔥 Start hot-reload development server
 	$(call step,$(BLUE)ℹ,Starting hot-reload engine...)
 	@docker exec -it $(CONTAINER) sh -c "cd /app && pnpm run start:dev"
 

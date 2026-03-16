@@ -49,7 +49,7 @@ services:
   engine:
     build:
       context: .
-      dockerfile: docker/Dockerfile.app
+      dockerfile: docker/Dockerfile.backend
     container_name: baas-prod-engine
     restart: unless-stopped
     depends_on:
