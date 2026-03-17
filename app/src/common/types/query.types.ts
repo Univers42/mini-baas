@@ -1,13 +1,13 @@
 export interface QueryOptions {
-  where?: Record<string, any>;
-  orderBy?: Record<string, 'asc' | 'desc'>;
+  where?: Record<string, unknown>;
+  orderBy?: Record<string, "asc" | "desc">;
   limit?: number;
   offset?: number;
   select?: string[];
 }
 
 export interface QueryResult {
-  data: Record<string, any>[];
+  data: Record<string, unknown>[];
   total: number;
 }
 

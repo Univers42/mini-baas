@@ -1,21 +1,31 @@
-import { UniversalSchemaMap } from '../types/schema.types';
-import { QueryIR, QueryResult, QueryOptions } from '../types/query.types';
+import { UniversalSchemaMap } from "../types/schema.types";
+import { QueryIR, QueryResult, QueryOptions } from "../types/query.types";
 
 export interface IDatabaseAdapter {
   readonly engine: string;
 
   // Lifecycle methods
-  connect(config: any): Promise<void>;
+  connect(config: unknown): Promise<void>;
   disconnect(): Promise<void>;
   ping(): Promise<boolean>;
 
   // CRUD Operations (The Universal Contract)
-  findOne(collection: string, filter: Record<string, any>): Promise<Record<string, any> | null>;
+  findOne(
+    collection: string,
+    filter: Record<string, unknown>,
+  ): Promise<Record<string, unknown> | null>;
   findMany(collection: string, options?: QueryOptions): Promise<QueryResult>;
-  create(collection: string, data: Record<string, any>): Promise<Record<string, any>>;
-  update(collection: string, filter: Record<string, any>, data: Record<string, any>): Promise<Record<string, any>>;
-  delete(collection: string, filter: Record<string, any>): Promise<boolean>;
-  count(collection: string, filter?: Record<string, any>): Promise<number>;
+  create(
+    collection: string,
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
+  update(
+    collection: string,
+    filter: Record<string, unknown>,
+    data: Record<string, unknown>,
+  ): Promise<Record<string, unknown>>;
+  delete(collection: string, filter: Record<string, unknown>): Promise<boolean>;
+  count(collection: string, filter?: Record<string, unknown>): Promise<number>;
 
   // Advanced Operations
   executeQuery(query: QueryIR): Promise<QueryResult>;
@@ -23,7 +33,7 @@ export interface IDatabaseAdapter {
 
   // DDL (Data Definition Language) - Schema Provisioning
   collectionExists(name: string): Promise<boolean>;
-  createCollection(name: string, schema: any): Promise<void>;
+  createCollection(name: string, schema: unknown): Promise<void>;
   dropCollection(name: string): Promise<void>;
-  ensureIndexes(name: string, indexes: any[]): Promise<void>;
+  ensureIndexes(name: string, indexes: unknown[]): Promise<void>;
 }
