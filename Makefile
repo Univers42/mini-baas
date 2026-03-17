@@ -274,8 +274,8 @@ install-hooks: ## 🛡️ Install Native Git Pre-push Hooks (Host-side)
 	@echo '  exit 1' >> .git/hooks/pre-push
 	@echo 'fi' >> .git/hooks/pre-push
 	
-	# Engine is UP. Run format, lint, and typecheck. If any fails, abort the push.
-	@echo 'make format && make lint && make typecheck' >> .git/hooks/pre-push
+	# Run format, lint, typecheck, and unit tests. If any fails, abort.
+	@echo 'make format && make lint && make typecheck && make test-unit' >> .git/hooks/pre-push
 	@echo 'if [ $$? -ne 0 ]; then' >> .git/hooks/pre-push
 	@echo '  echo -e "\033[0;31m❌ Quality check failed. Push blocked to protect $$CURRENT_BRANCH!\033[0m"' >> .git/hooks/pre-push
 	@echo '  exit 1' >> .git/hooks/pre-push
