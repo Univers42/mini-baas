@@ -29,7 +29,7 @@ function getLogLevels(level?: string): LogLevel[] {
   }
 }
 
-async function bootstrap(): Promise<void> {
+async function bootstrap() {
   // Inject the dynamic log levels based on the environment variable
   const app = await NestFactory.create(AppModule, {
     logger: getLogLevels(process.env.LOG_LEVEL),
