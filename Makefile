@@ -123,7 +123,8 @@ update:
 banner:
 	$(BANNER)
 
-bootstrap: docker-up install typecheck ## ⚡ Initial setup (install deps & typecheck)
+bootstrap: preflight docker-up install install-hooks typecheck ## ⚡ Initial setup
+	@echo -e "$(GREEN)✅ Engine setup & DevOps Shield complete!$(NC)"
 	@echo ""
 	@echo -e "$(GREEN)╔══════════════════════════════════════════════════════════╗$(NC)"
 	@echo -e "$(GREEN)║$(NC)  ✅  $(BOLD)Engine setup complete!$(NC)                            $(GREEN)║$(NC)"
@@ -195,7 +196,7 @@ re: fclean all ## 🔄 Rebuild everything from scratch (fclean + all)
 #  📦 DEPENDENCIES & DEV
 # ============================================
 
-.PHONY: install dev shell ensure-backend-deps
+.PHONY: install dev shell ensure-backend-deps add-dep
 
 install: docker-up ## 📦 Install Node.js dependencies inside container
 	$(call step,$(BLUE)ℹ,Installing BaaS dependencies...)
@@ -207,6 +208,13 @@ dev: docker-up install ## 🔥 Start hot-reload development server (LOG_LEVEL=de
 
 shell: ## 🐚 Open interactive bash shell inside dev container
 	@docker exec -it $(CONTAINER) bash
+
+add-dep: ## 📦 Add a dependency (usage: make add-dep PKG="name" DEV=1)
+	@if [ "$(DEV)" = "1" ]; then \
+		docker exec -it $(CONTAINER) sh -c "cd /app && pnpm add -D $(PKG)"; \
+	else \
+		docker exec -it $(CONTAINER) sh -c "cd /app && pnpm add $(PKG)"; \
+	fi
 
 ensure-backend-deps:
 	$(call step,$(BLUE)ℹ,Ensuring backend dependencies are installed...)
@@ -224,6 +232,26 @@ ensure-backend-deps:
 	}
 
 # ============================================
+#  🛡️ GIT HOOKS
+# ============================================
+
+.PHONY: install-hooks
+
+install-hooks: ## 🛡️ Install Native Git Pre-commit Hooks (Host-side)
+	$(call step,$(BLUE)ℹ,Installing DevOps Shield...)
+	@echo '#!/bin/bash' > .git/hooks/pre-commit
+	@echo 'CONTAINER_NAME=$(CONTAINER)' >> .git/hooks/pre-commit
+	@echo 'if [ $$(docker ps -q -f name=$$CONTAINER_NAME) ]; then' >> .git/hooks/pre-commit
+	@echo '  echo -e "\033[0;34m🛡️  DevOps: Engine is UP. Running strict checks...\033[0m"' >> .git/hooks/pre-commit
+	@echo '  make format && make lint && make typecheck' >> .git/hooks/pre-commit
+	@echo '  if [ $$? -ne 0 ]; then echo -e "\033[0;31m❌ Quality check failed. Commit blocked.\033[0m"; exit 1; fi' >> .git/hooks/pre-commit
+	@echo 'else' >> .git/hooks/pre-commit
+	@echo '  echo -e "\033[1;33m⚠️  DevOps: Engine is DOWN. Checks skipped (be careful!).\033[0m"' >> .git/hooks/pre-commit
+	@echo 'fi' >> .git/hooks/pre-commit
+	@chmod +x .git/hooks/pre-commit
+	$(call step,$(GREEN)✓,DevOps Shield active!)
+
+# ============================================
 #  ✅ QUALITY & PHASE 0 CHECKS
 # ============================================
 
@@ -231,7 +259,7 @@ ensure-backend-deps:
 
 lint: ## 🔍 Run ESLint on the codebase
 	$(call step,$(BLUE)ℹ,Running ESLint...)
-	@docker exec $(CONTAINER) sh -c "cd /app && pnpm exec eslint . 2>/dev/null || true"
+	@docker exec $(CONTAINER) sh -c "cd /app && pnpm exec eslint . "
 	$(call step,$(GREEN)✓,Lint complete)
 
 

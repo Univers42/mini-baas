@@ -1,21 +1,21 @@
 // Universal types supported by all engines
 export type UniversalFieldType =
-  | 'string'
-  | 'text'
-  | 'integer'
-  | 'bigint'
-  | 'float'
-  | 'decimal'
-  | 'boolean'
-  | 'datetime'
-  | 'uuid'
-  | 'json'
-  | 'array';
+  | "string"
+  | "text"
+  | "integer"
+  | "bigint"
+  | "float"
+  | "decimal"
+  | "boolean"
+  | "datetime"
+  | "uuid"
+  | "json"
+  | "array";
 
 export interface FieldDefinition {
   type: UniversalFieldType;
   required?: boolean;
-  default?: any;
+  default?: unknown;
   unique?: boolean;
 }
 
