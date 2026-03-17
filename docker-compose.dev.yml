@@ -100,6 +100,7 @@ services:
         condition: service_healthy
     ports:
       - "3000:3000"
+    command: sh -c "pnpm install && pnpm run start:dev"
     volumes:
       # ── Clean Source Code Mount ──
       - ./app:/app
@@ -111,6 +112,7 @@ services:
       - NODE_ENV=development
       - PORT=3000
       - SWAGGER_ENABLED=true
+      - LOG_LEVEL=${LOG_LEVEL:-debug}
       # ── Databases ──
       - MONGODB_URI=mongodb://system-db:27017
       - MONGODB_DB_NAME=mini_baas_control

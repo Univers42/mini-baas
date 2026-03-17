@@ -294,9 +294,9 @@ install: docker-up ## 📦 Install Node.js dependencies inside container
 	$(call step,$(BLUE)ℹ,Installing BaaS dependencies...)
 	@docker exec $(CONTAINER) sh -c "cd /app && pnpm install"
 
-dev: docker-up install ## 🔥 Start hot-reload development server (LOG_LEVEL=debug|error|warn)
-	$(call step,$(BLUE)ℹ,Starting hot-reload engine [LOG_LEVEL=$(LOG_LEVEL)]...)
-	@docker exec -it -e LOG_LEVEL=$(LOG_LEVEL) $(CONTAINER) sh -c "cd /app && pnpm run start:dev"
+dev: docker-up ## 🔥 Tail hot-reload engine logs (LOG_LEVEL=debug|error|warn)
+	$(call step,$(BLUE)ℹ,Tailing hot-reload engine logs [LOG_LEVEL=$(LOG_LEVEL)]...)
+	@$(COMPOSE_DEV) logs -f engine
 
 shell: ## 🐚 Open interactive bash shell inside dev container
 	@docker exec -it $(CONTAINER) bash
