@@ -1,0 +1,25 @@
+{
+  "name": "mini-baas",
+  "dockerComposeFile": [
+    "../docker-compose.dev.yml",
+    "docker-compose.vscode.yml"
+  ],
+  "service": "engine",
+  "workspaceFolder": "/workspaces/mini-baas",
+  "shutdownAction": "stopCompose",
+  "overrideCommand": false,
+  "forwardPorts": [3000, 5432, 6379, 8025, 27117],
+  "customizations": {
+    "vscode": {
+      "settings": {
+        "terminal.integrated.defaultProfile.linux": "bash"
+      },
+      "extensions": [
+        "ms-azuretools.vscode-docker",
+        "ms-vscode-remote.remote-containers",
+        "dbaeumer.vscode-eslint",
+        "esbenp.prettier-vscode"
+      ]
+    }
+  }
+}

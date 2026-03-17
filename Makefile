@@ -38,10 +38,23 @@ COMPOSE_CMD := $(shell \
 
 # ── Variables ────────────────────────────────────────
 COMPOSE_DEV		:= $(COMPOSE_CMD) -f docker-compose.dev.yml
+COMPOSE_PROD	:= $(COMPOSE_CMD) -f docker-compose.yml
 CONTAINER		:= baas-dev-engine
 APP				:= app
 FILTER          ?=
 LOG_LEVEL       ?= debug
+DOCKER_PROGRESS ?= auto
+DOCKER_CACHE_ROOT := .docker/buildx-cache
+DEV_IMAGE       := mini-baas-dev-engine:local
+PROD_IMAGE      := mini-baas-prod-engine:local
+DEV_CACHE_DIR   := $(DOCKER_CACHE_ROOT)/dev
+PROD_CACHE_DIR  := $(DOCKER_CACHE_ROOT)/prod
+
+ifneq ($(findstring docker compose,$(COMPOSE_CMD)),)
+COMPOSE_BUILD_PROGRESS_FLAG := --progress=$(DOCKER_PROGRESS)
+else
+COMPOSE_BUILD_PROGRESS_FLAG :=
+endif
 
 # Colors
 BLUE    := \033[0;34m
@@ -137,11 +150,90 @@ bootstrap: docker-up install typecheck ## ⚡ Initial setup (install deps & type
 #  🐳 DOCKER
 # ============================================
 
-.PHONY: docker-up docker-down docker-logs
+.PHONY: docker-build docker-build-prod docker-up docker-down docker-logs
 
-docker-up: check-compose ## 🐳 Start all containers in background
+docker-build: check-compose ## 🐳 Build the dev engine image with cache + timer
+	$(call step,$(BLUE)ℹ,Building dev engine image...)
+ifeq ($(BUILDX_AVAILABLE),1)
+	@mkdir -p $(DOCKER_CACHE_ROOT)
+	@start=$$(date +%s); \
+	cache_dir="$(DEV_CACHE_DIR)"; \
+	cache_new="$(DEV_CACHE_DIR)-new"; \
+	cache_from=""; \
+	if [ -d "$$cache_dir" ]; then cache_from="--cache-from type=local,src=$$cache_dir"; fi; \
+	rm -rf "$$cache_new"; \
+	status=0; \
+	docker buildx build \
+		--load \
+		--progress=$(DOCKER_PROGRESS) \
+		--file docker/Dockerfile.dev \
+		--tag $(DEV_IMAGE) \
+		$$cache_from \
+		--cache-to type=local,dest=$$cache_new,mode=max \
+		. || status=$$?; \
+	if [ $$status -eq 0 ]; then \
+		rm -rf "$$cache_dir"; \
+		mv "$$cache_new" "$$cache_dir"; \
+	else \
+		rm -rf "$$cache_new"; \
+	fi; \
+	end=$$(date +%s); \
+	elapsed=$$((end - start)); \
+	printf "  $(CYAN)⏱$(NC)  Dev image build time: %02dh:%02dm:%02ds\n" $$((elapsed / 3600)) $$(((elapsed % 3600) / 60)) $$((elapsed % 60)); \
+	exit $$status
+else
+	@start=$$(date +%s); \
+	status=0; \
+	$(COMPOSE_DEV) build $(COMPOSE_BUILD_PROGRESS_FLAG) engine || status=$$?; \
+	end=$$(date +%s); \
+	elapsed=$$((end - start)); \
+	printf "  $(CYAN)⏱$(NC)  Dev image build time: %02dh:%02dm:%02ds\n" $$((elapsed / 3600)) $$(((elapsed % 3600) / 60)) $$((elapsed % 60)); \
+	exit $$status
+endif
+
+docker-build-prod: check-compose ## 🐳 Build the prod engine image with cache + timer
+	$(call step,$(BLUE)ℹ,Building prod engine image...)
+ifeq ($(BUILDX_AVAILABLE),1)
+	@mkdir -p $(DOCKER_CACHE_ROOT)
+	@start=$$(date +%s); \
+	cache_dir="$(PROD_CACHE_DIR)"; \
+	cache_new="$(PROD_CACHE_DIR)-new"; \
+	cache_from=""; \
+	if [ -d "$$cache_dir" ]; then cache_from="--cache-from type=local,src=$$cache_dir"; fi; \
+	rm -rf "$$cache_new"; \
+	status=0; \
+	docker buildx build \
+		--load \
+		--progress=$(DOCKER_PROGRESS) \
+		--file docker/Dockerfile.backend \
+		--target production \
+		--tag $(PROD_IMAGE) \
+		$$cache_from \
+		--cache-to type=local,dest=$$cache_new,mode=max \
+		. || status=$$?; \
+	if [ $$status -eq 0 ]; then \
+		rm -rf "$$cache_dir"; \
+		mv "$$cache_new" "$$cache_dir"; \
+	else \
+		rm -rf "$$cache_new"; \
+	fi; \
+	end=$$(date +%s); \
+	elapsed=$$((end - start)); \
+	printf "  $(CYAN)⏱$(NC)  Prod image build time: %02dh:%02dm:%02ds\n" $$((elapsed / 3600)) $$(((elapsed % 3600) / 60)) $$((elapsed % 60)); \
+	exit $$status
+else
+	@start=$$(date +%s); \
+	status=0; \
+	$(COMPOSE_PROD) build $(COMPOSE_BUILD_PROGRESS_FLAG) engine || status=$$?; \
+	end=$$(date +%s); \
+	elapsed=$$((end - start)); \
+	printf "  $(CYAN)⏱$(NC)  Prod image build time: %02dh:%02dm:%02ds\n" $$((elapsed / 3600)) $$(((elapsed % 3600) / 60)) $$((elapsed % 60)); \
+	exit $$status
+endif
+
+docker-up: docker-build ## 🐳 Start all containers in background
 	$(call step,$(BLUE)ℹ,Starting Engine containers...)
-	@$(COMPOSE_DEV) up -d --build
+	@$(COMPOSE_DEV) up -d
 
 docker-down: check-compose ## 🛑 Stop all containers
 	$(call step,$(YELLOW)⚠,Stopping Engine...)
@@ -151,7 +243,7 @@ docker-logs: check-compose  ## 🐳 Tail all container logs
 	@$(COMPOSE_DEV) logs -f
 
 docker-ps: check-compose  ## 🐳 Show running containers
-	@$(COMPOSE_DEV) ps
+	@$(COMPOSE_DEV) ps #--format 'table {{.Names}}\t{{.Image}}\t{{.Status}}'
 
 docker-images: check-compose  ## 🐳 Show built images
 	@$(COMPOSE_DEV) images

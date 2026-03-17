@@ -47,9 +47,11 @@ services:
       - baas-net
 
   engine:
+    image: mini-baas-prod-engine:local
     build:
       context: .
       dockerfile: docker/Dockerfile.backend
+      target: production
     container_name: baas-prod-engine
     restart: unless-stopped
     depends_on:
