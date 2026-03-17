@@ -1,15 +1,15 @@
 # mini-baas — DevOps & CI/CD Foundation (Phase 0)
 
-> **The DevOps Shield: Shift-Left Quality Control**
-> A robust, container-native pipeline designed to catch errors before they enter the repository, ensuring the `mini-baas` engine remains stable, strictly typed, and independently verifiable across all development environments.
+> **The DevOps Shield: Adaptive Friction & Quality Control**
+> A robust, container-native pipeline designed to protect shared integration branches without hindering individual developer velocity.
 
 ---
 
 ## 1. Executive Summary
 
-As `mini-baas` evolves into a complex Polyglot App Factory, the cost of debugging runtime errors multiplies. Phase 0 of the DevOps strategy focuses on the **"Shift-Left"** principle: catching formatting, linting, and typing errors on the developer's local machine exactly at the moment of the `git commit`, rather than waiting for the cloud CI to fail.
+Phase 0 of the DevOps strategy has evolved from a strict "Shift-Left" blocking model to an **Adaptive Friction** model. This approach recognizes that developers need freedom to experiment in feature branches while requiring absolute stability in shared branches (`develop`, `main`). 
 
-This document outlines the foundational DevOps architecture implemented to protect the `main` and `develop` branches without adding friction or requiring host-level software dependencies.
+The system now enforces strict quality gates (Linting, Type-checking) only when code is about to be shared, ensuring the engine remains stable and strictly typed where it matters most.
 
 ---
 
@@ -17,80 +17,75 @@ This document outlines the foundational DevOps architecture implemented to prote
 
 A core requirement for `mini-baas` (and subsequently `prismática`) is that developers only need `Docker` and `Make` installed on their host machines. 
 
-### Why we rejected standard Node.js hook managers
-Industry-standard tools like `Husky` or `Lefthook` require Node.js or specific binaries to be installed on the host operating system to intercept Git hooks. In restrictive environments (like 42 iMacs) or heterogeneous teams (Linux, macOS, Windows), this breaks the "Fully Containerized" promise.
-
-**The Solution:** We implemented a purely native, Bash-based pre-commit hook generated directly by our `Makefile`. It acts as a bridge, intercepting the host's Git action and delegating the execution to the Docker container.
+**The Solution:** We use a purely native, Bash-based **pre-push hook**. It acts as a gatekeeper that intercepts the `git push` command, ensuring that no broken code leaves the developer's local environment for protected branches.
 
 ---
 
-## 3. The DevOps Shield (Local Git Hooks)
+## 3. The Adaptive DevOps Shield (Pre-push)
 
-The `install-hooks` command establishes our local wall. When a developer attempts to commit code, the shield evaluates the state of the container infrastructure.
+The `install-hooks` command deploys a context-aware shield. The level of enforcement depends on the target branch:
 
 ```mermaid
 flowchart TD
-    DEV[Developer types 'git commit'] --> HOOK{Is baas-dev-engine UP?}
+    DEV[Developer types 'git push'] --> BRANCH{Target Branch?}
+    
+    BRANCH -->|feat/* or others| FREE[🕊️ Free Will Mode]
+    FREE --> PUSH_OK[Push Allowed]
 
-    HOOK -->|No| WARN[Show Warning]
-    WARN --> PROMPT{Force commit?}
-    PROMPT -->|Yes| COMMIT_OK[Commit Created]
-    PROMPT -->|No| ABORT[Commit Aborted]
+    BRANCH -->|develop or main| ENGINE{Is Engine UP?}
+    
+    ENGINE -->|No| FATAL[🛑 FATAL ERROR]
+    FATAL --> ABORT[Push Blocked\nMust start engine]
 
-    HOOK -->|Yes| LINT[make lint]
-    LINT --> TYPE[make typecheck]
-    TYPE --> CHECK{Exit Code == 0?}
+    ENGINE -->|Yes| QUALITY[make lint && make typecheck]
+    QUALITY --> CHECK{Exit Code == 0?}
 
-    CHECK -->|No| ABORT_ERR[Commit Blocked\nFix your code!]
-    CHECK -->|Yes| COMMIT_SEC[Commit Created]
+    CHECK -->|No| ABORT_ERR[Push Blocked ❌\nFix code quality!]
+    CHECK -->|Yes| PUSH_SEC[Push Allowed ✅]
 
-    COMMIT_OK --> PUSH[git push]
-    COMMIT_SEC --> PUSH
+    PUSH_OK --> CI[GitHub Actions CI\nFinal Alarm]
+    PUSH_SEC --> CI
 
-    PUSH --> CI[GitHub Actions CI\nUltimate Judge]
-
-    style HOOK fill:#3498db,color:#fff
+    style BRANCH fill:#3498db,color:#fff
     style ABORT_ERR fill:#e74c3c,color:#fff
-    style COMMIT_SEC fill:#2ecc71,color:#000
-    style CI fill:#9b59b6,color:#fff
+    style FATAL fill:#e74c3c,color:#fff
+    style PUSH_SEC fill:#2ecc71,color:#000
+    style FREE fill:#2ecc71,color:#000
 ```
 
-### Makefile Integration
-The shield is automatically deployed during the project setup via the `make bootstrap` command, making the security layer completely invisible and automatic for new team members.
+### Key Logic Features:
+* **Feature Branches:** Zero friction. Developers can push WIP (Work In Progress) code to backup their work or share drafts.
+* **Shared Branches (`develop`/`main`):** Zero tolerance. Pushing requires the engine to be up and all quality checks to pass. No bypass allowed if the engine is down.
 
 ---
 
-## 4. Strict Static Analysis Configuration
+## 4. Environment & Secrets Validation
 
-To ensure the polyglot engine doesn't fail silently at runtime, we have hardened the static analysis tools far beyond their default configurations.
+To prevent "broken environment" syndrome, we have implemented an automated synchronization check between `.env` and `.env.example`.
+
+* **`make check-env`:** Compares keys in the local environment against the required template.
+* **Automated Failure:** The engine will refuse to boot via `make dev` or `make bootstrap` if required variables are missing, forcing immediate alignment with the project's configuration contract.
+
+---
+
+## 5. Strict Static Analysis Configuration
 
 | Tool | Configuration Rule | Purpose / DevOps Rationale |
 | :--- | :--- | :--- |
 | **TypeScript** | `"strict": true` | Activates the highest level of type safety, eliminating silent casting issues. |
-| **TypeScript** | `"strictNullChecks": true` | Prevents the dreaded `TypeError: undefined is not an object` in production. |
-| **ESLint** | `no-explicit-any: "error"` | **Banned completely.** In a metadata-driven engine, types must be predictable. If `any` is allowed, the compiler is effectively disabled. |
-| **ESLint** | `no-floating-promises: "error"` | **Critical for Node.js.** Forgetting an `await` before a database call causes invisible memory leaks and data loss. This rule forces explicit handling. |
-
----
-
-## 5. Cloud CI/CD Alignment
-
-The local DevOps Shield is completely mirrored in our cloud infrastructure (GitHub Actions).
-
-* **`ci.yml`:** The continuous integration pipeline spins up a fully functional matrix (MongoDB, PostgreSQL, Redis) and runs the exact same `make lint` and `make typecheck` commands before executing Unit and E2E tests.
-* **Redundancy:** If a developer forces a bad commit locally using `git commit --no-verify`, the Cloud CI acts as the ultimate judge and will block the Pull Request merge.
-
-Additionally, asynchronous automation bots (`pr-watchdog.yml`, `stale.yml`, `weekly-summary.yml`) are deployed to manage team workflow and issue triage without manual intervention.
+| **ESLint** | `no-explicit-any: "error"` | **Banned.** Forces the use of `unknown` or explicit interfaces, essential for a metadata-driven engine. |
+| **ESLint** | `no-floating-promises: "error"` | **Critical.** Prevents unhandled async operations that lead to memory leaks and zombie processes. |
+| **Bootstrap** | `.catch()` on init | **Process Safety.** Ensures the Node.js process exits with an error code if the engine fails to start (e.g., DB connection failure). |
 
 ---
 
 ## 6. Next Steps (Phase 1 DevOps Roadmap)
 
-With the local code quality secured, the next phase of the DevOps architecture will address:
+With the adaptive quality shield in place, the next phase will address:
 
-1. **Environment & Secrets Validation:** Automating `.env` checks to prevent containers from booting without required cryptographic keys (`MASTER_ENCRYPTION_KEY`).
-2. **Test Coverage Thresholds:** Enforcing a minimum code coverage percentage in Jest to guarantee that the `Control Plane` logic is adequately tested.
-3. **Monorepo / Multi-repo strategy:** Adapting these pipelines to handle the frontend consumer (`prismática`) seamlessly.
+1. **Test Coverage Thresholds:** Enforcing a minimum code coverage (e.g., 80%) in Jest for the `Control Plane`.
+2. **Standardized Logging:** Implementing structured JSON logging for better observability in production environments.
+3. **Container Optimization:** Reducing image size and implementing multi-stage builds for the final BaaS engine.
 
 
 (secret secret: git commit -m "..." --no-verify) JUST FOR EMERGENCIES!!

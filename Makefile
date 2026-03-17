@@ -237,19 +237,55 @@ ensure-backend-deps:
 
 .PHONY: install-hooks
 
-install-hooks: ## 🛡️ Install Native Git Pre-commit Hooks (Host-side)
-	$(call step,$(BLUE)ℹ,Installing DevOps Shield...)
-	@echo '#!/bin/bash' > .git/hooks/pre-commit
-	@echo 'CONTAINER_NAME=$(CONTAINER)' >> .git/hooks/pre-commit
-	@echo 'if [ $$(docker ps -q -f name=$$CONTAINER_NAME) ]; then' >> .git/hooks/pre-commit
-	@echo '  echo -e "\033[0;34m🛡️  DevOps: Engine is UP. Running strict checks...\033[0m"' >> .git/hooks/pre-commit
-	@echo '  make format && make lint && make typecheck' >> .git/hooks/pre-commit
-	@echo '  if [ $$? -ne 0 ]; then echo -e "\033[0;31m❌ Quality check failed. Commit blocked.\033[0m"; exit 1; fi' >> .git/hooks/pre-commit
-	@echo 'else' >> .git/hooks/pre-commit
-	@echo '  echo -e "\033[1;33m⚠️  DevOps: Engine is DOWN. Checks skipped (be careful!).\033[0m"' >> .git/hooks/pre-commit
-	@echo 'fi' >> .git/hooks/pre-commit
-	@chmod +x .git/hooks/pre-commit
-	$(call step,$(GREEN)✓,DevOps Shield active!)
+install-hooks: ## 🛡️ Install Native Git Pre-push Hooks (Host-side)
+	$(call step,$(BLUE)ℹ,Installing DevOps Shield (Pre-push)...)
+	
+	# Clean up any strict pre-commit hooks to allow WIP commits locally
+	@rm -f .git/hooks/pre-commit 
+	
+	# Generate the pre-push hook script dynamically
+	@echo '#!/bin/bash' > .git/hooks/pre-push
+	@echo 'CONTAINER_NAME=$(CONTAINER)' >> .git/hooks/pre-push
+	
+	# Get the current Git branch the developer is pushing from
+	@echo 'CURRENT_BRANCH=$$(git rev-parse --abbrev-ref HEAD)' >> .git/hooks/pre-push
+	@echo '' >> .git/hooks/pre-push
+	
+	# ---------------------------------------------------------
+	# 🕊️ FREE WILL ZONE (Feature Branches)
+	# ---------------------------------------------------------
+	@echo '# If the branch is NOT develop and NOT main, allow immediate push' >> .git/hooks/pre-push
+	@echo 'if [[ "$$CURRENT_BRANCH" != "develop" && "$$CURRENT_BRANCH" != "main" ]]; then' >> .git/hooks/pre-push
+	@echo '  echo -e "\033[0;32m🕊️  DevOps: Feature branch ($$CURRENT_BRANCH) detected. Free will mode active! Push allowed.\033[0m"' >> .git/hooks/pre-push
+	@echo '  exit 0' >> .git/hooks/pre-push
+	@echo 'fi' >> .git/hooks/pre-push
+	@echo '' >> .git/hooks/pre-push
+	
+	# ---------------------------------------------------------
+	# 🛑 ZERO TOLERANCE ZONE (Shared Branches)
+	# ---------------------------------------------------------
+	@echo '# Protected branch detected. Enforcing Zero Tolerance policy.' >> .git/hooks/pre-push
+	@echo 'echo -e "\033[1;33m🛡️  DevOps: Protected branch ($$CURRENT_BRANCH) detected. Applying strict checks...\033[0m"' >> .git/hooks/pre-push
+	
+	# Check if the development container is DOWN
+	@echo 'if [ -z "$$(docker ps -q -f name=$$CONTAINER_NAME)" ]; then' >> .git/hooks/pre-push
+	@echo '  echo -e "\033[0;31m🛑 DevOps FATAL: Engine is DOWN. You CANNOT push to $$CURRENT_BRANCH without passing checks.\033[0m"' >> .git/hooks/pre-push
+	@echo '  echo -e "Please run \033[1;33mmake dev\033[0m to start the engine and try again."' >> .git/hooks/pre-push
+	@echo '  exit 1' >> .git/hooks/pre-push
+	@echo 'fi' >> .git/hooks/pre-push
+	
+	# Engine is UP. Run format, lint, and typecheck. If any fails, abort the push.
+	@echo 'make format && make lint && make typecheck' >> .git/hooks/pre-push
+	@echo 'if [ $$? -ne 0 ]; then' >> .git/hooks/pre-push
+	@echo '  echo -e "\033[0;31m❌ Quality check failed. Push blocked to protect $$CURRENT_BRANCH!\033[0m"' >> .git/hooks/pre-push
+	@echo '  exit 1' >> .git/hooks/pre-push
+	@echo 'fi' >> .git/hooks/pre-push
+	
+	@echo 'echo -e "\033[0;32m✅ Quality checks passed. Pushing to $$CURRENT_BRANCH...\033[0m"' >> .git/hooks/pre-push
+	
+	# Make the hook executable
+	@chmod +x .git/hooks/pre-push
+	$(call step,$(GREEN)✓,DevOps Pre-push Shield active!)
 
 # ============================================
 #  ✅ QUALITY & PHASE 0 CHECKS

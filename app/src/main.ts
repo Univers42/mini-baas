@@ -9,7 +9,7 @@ import helmet from "helmet";
 import { AllExceptionsFilter } from "./common/exceptions/all-exceptions.filter";
 
 // Helper function to map a string level to NestJS LogLevel array
-function getLogLevels(level?: string): LogLevel[] {
+function getLogLevels(level?: string) {
   switch (level?.toLowerCase()) {
     case "fatal":
       return ["fatal"];
