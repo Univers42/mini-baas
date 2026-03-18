@@ -1,66 +1,78 @@
 # mini-baas — DevOps & CI/CD Foundation (Phase 0)
 
-> **The DevOps Shield: Shift-Left Quality Control**
-> A robust, container-native pipeline designed to catch errors before they enter the repository, ensuring the `mini-baas` engine remains stable, strictly typed, and independently verifiable across all development environments.
+> **The DevOps Shield: Adaptive Friction & Quality Control**
+> A robust, container-native pipeline designed to protect shared integration branches without hindering individual developer velocity.
 
 ---
 
 ## 1. Executive Summary
 
-As `mini-baas` evolves into a complex Polyglot App Factory, the cost of debugging runtime errors multiplies. Phase 0 of the DevOps strategy focuses on the **"Shift-Left"** principle: catching formatting, linting, and typing errors on the developer's local machine exactly at the moment of the `git commit`, rather than waiting for the cloud CI to fail.
+As `mini-baas` evolves into a complex Polyglot App Factory, the cost of debugging runtime errors multiplies. Phase 0 of our DevOps strategy establishes the foundational code quality gates. 
 
-This document outlines the foundational DevOps architecture implemented to protect the `main` and `develop` branches without adding friction or requiring host-level software dependencies.
-
----
-
-## 2. The "Only Docker" Philosophy
-
-A core requirement for `mini-baas` (and subsequently `prismática`) is that developers only need `Docker` and `Make` installed on their host machines. 
-
-### Why we rejected standard Node.js hook managers
-Industry-standard tools like `Husky` or `Lefthook` require Node.js or specific binaries to be installed on the host operating system to intercept Git hooks. In restrictive environments (like 42 iMacs) or heterogeneous teams (Linux, macOS, Windows), this breaks the "Fully Containerized" promise.
-
-**The Solution:** We implemented a purely native, Bash-based pre-commit hook generated directly by our `Makefile`. It acts as a bridge, intercepting the host's Git action and delegating the execution to the Docker container.
+While we initially explored a strict "Shift-Left" model (blocking bad code at the `commit` level), we evolved to an **Adaptive Friction** model at the `push` level. This ensures that developers retain the freedom to experiment and save Work-In-Progress (WIP) locally, while establishing an impenetrable wall before any broken code reaches shared branches like `develop` or `main`.
 
 ---
 
-## 3. The DevOps Shield (Local Git Hooks)
+## 2. The Evolution: From Pre-Commit to Pre-Push (The "Why")
 
-The `install-hooks` command establishes our local wall. When a developer attempts to commit code, the shield evaluates the state of the container infrastructure.
+### The Initial Approach
+We started with a strict `pre-commit` hook that ran linting and type-checking on every commit. 
+* **The flaw:** It created a terrible Developer Experience (DevEx). Developers could not save intermediate, broken states of their code locally without fighting the system.
+
+### The Scrum Context
+Our team uses an agile Scrum methodology where developers often merge their feature branches directly into `develop` without mandatory Pull Requests (PRs). 
+* **The risk:** Without PRs acting as a safety net, a single broken `git push` to `develop` breaks the environment for the entire team instantly.
+
+### The Final Decision: Adaptive Pre-Push
+We implemented a dynamic `pre-push` hook natively in Bash. It analyzes the target branch and applies the appropriate level of friction:
+* **Feature Branches (`feat/*`, `fix/*`, etc.):** *Free Will Mode.* Developers can push broken code to backup their work or share drafts. Zero friction.
+* **Shared Branches (`develop`, `main`):** *Zero Tolerance Zone.* The push is intercepted. The `baas-dev-engine` must be running, and all strict formatting, linting, and compilation checks must pass. If they fail, the push is blocked entirely.
+
+---
+
+## 3. The "Only Docker" Philosophy
+
+A core requirement for `mini-baas` is that developers only need `Docker` and `Make` installed on their host machines. 
+
+We explicitly rejected industry-standard tools like `Husky` or `Lefthook` because they require Node.js or specific binaries installed on the host OS. Instead, our `Makefile` dynamically generates a native Bash Git Hook (`install-hooks`) that delegates all quality checks to the Docker container, guaranteeing identical execution across macOS, Linux, and Windows.
+
+---
+
+## 4. The Adaptive DevOps Shield Architecture
+
+The `make install-hooks` command deploys our context-aware shield.
 
 ```mermaid
 flowchart TD
-    DEV[Developer types 'git commit'] --> HOOK{Is baas-dev-engine UP?}
+    DEV[Developer types 'git push'] --> BRANCH{Target Branch?}
+    
+    BRANCH -->|feat/* or others| FREE[🕊️ Free Will Mode]
+    FREE --> PUSH_OK[Push Allowed]
 
-    HOOK -->|No| WARN[Show Warning]
-    WARN --> PROMPT{Force commit?}
-    PROMPT -->|Yes| COMMIT_OK[Commit Created]
-    PROMPT -->|No| ABORT[Commit Aborted]
+    BRANCH -->|develop or main| ENGINE{Is Engine UP?}
+    
+    ENGINE -->|No| FATAL[🛑 FATAL ERROR]
+    FATAL --> ABORT[Push Blocked\nMust start engine]
 
-    HOOK -->|Yes| LINT[make lint]
-    LINT --> TYPE[make typecheck]
-    TYPE --> CHECK{Exit Code == 0?}
+    ENGINE -->|Yes| QUALITY[make lint && make typecheck]
+    QUALITY --> CHECK{Exit Code == 0?}
 
-    CHECK -->|No| ABORT_ERR[Commit Blocked\nFix your code!]
-    CHECK -->|Yes| COMMIT_SEC[Commit Created]
+    CHECK -->|No| ABORT_ERR[Push Blocked ❌\nFix code quality!]
+    CHECK -->|Yes| PUSH_SEC[Push Allowed ✅]
 
-    COMMIT_OK --> PUSH[git push]
-    COMMIT_SEC --> PUSH
+    PUSH_OK --> CI[GitHub Actions CI\nFinal Alarm]
+    PUSH_SEC --> CI
 
-    PUSH --> CI[GitHub Actions CI\nUltimate Judge]
-
-    style HOOK fill:#3498db,color:#fff
+    style BRANCH fill:#3498db,color:#fff
     style ABORT_ERR fill:#e74c3c,color:#fff
-    style COMMIT_SEC fill:#2ecc71,color:#000
-    style CI fill:#9b59b6,color:#fff
+    style FATAL fill:#e74c3c,color:#fff
+    style PUSH_SEC fill:#2ecc71,color:#000
+    style FREE fill:#2ecc71,color:#000
 ```
-
-### Makefile Integration
-The shield is automatically deployed during the project setup via the `make bootstrap` command, making the security layer completely invisible and automatic for new team members.
 
 ---
 
-## 4. Strict Static Analysis Configuration
+## 5. Strict Static Analysis Configuration
 
 To ensure the polyglot engine doesn't fail silently at runtime, we have hardened the static analysis tools far beyond their default configurations.
 
@@ -70,27 +82,26 @@ To ensure the polyglot engine doesn't fail silently at runtime, we have hardened
 | **TypeScript** | `"strictNullChecks": true` | Prevents the dreaded `TypeError: undefined is not an object` in production. |
 | **ESLint** | `no-explicit-any: "error"` | **Banned completely.** In a metadata-driven engine, types must be predictable. If `any` is allowed, the compiler is effectively disabled. |
 | **ESLint** | `no-floating-promises: "error"` | **Critical for Node.js.** Forgetting an `await` before a database call causes invisible memory leaks and data loss. This rule forces explicit handling. |
+| **App Core** | `.catch()` on Bootstrap | Ensures the Node.js process exits with an error code if the engine fails to start (e.g., DB connection failure), preventing "zombie" servers. |
 
 ---
 
-## 5. Cloud CI/CD Alignment
+## 6. Cloud CI/CD Alignment
 
 The local DevOps Shield is completely mirrored in our cloud infrastructure (GitHub Actions).
 
 * **`ci.yml`:** The continuous integration pipeline spins up a fully functional matrix (MongoDB, PostgreSQL, Redis) and runs the exact same `make lint` and `make typecheck` commands before executing Unit and E2E tests.
-* **Redundancy:** If a developer forces a bad commit locally using `git commit --no-verify`, the Cloud CI acts as the ultimate judge and will block the Pull Request merge.
-
-Additionally, asynchronous automation bots (`pr-watchdog.yml`, `stale.yml`, `weekly-summary.yml`) are deployed to manage team workflow and issue triage without manual intervention.
+* **Redundancy:** The Cloud CI acts as the ultimate judge and will alert the team if any bad code manages to bypass local protections.
 
 ---
 
-## 6. Next Steps (Phase 1 DevOps Roadmap)
+## 7. Next Steps (Phase 1 DevOps Roadmap)
 
 With the local code quality secured, the next phase of the DevOps architecture will address:
 
-1. **Environment & Secrets Validation:** Automating `.env` checks to prevent containers from booting without required cryptographic keys (`MASTER_ENCRYPTION_KEY`).
-2. **Test Coverage Thresholds:** Enforcing a minimum code coverage percentage in Jest to guarantee that the `Control Plane` logic is adequately tested.
-3. **Monorepo / Multi-repo strategy:** Adapting these pipelines to handle the frontend consumer (`prismática`) seamlessly.
+1. **Environment & Secrets Validation:** Automating `.env` vs `.env.example` checks in the `Makefile` to prevent containers from booting with missing configurations.
+2. **Test Coverage Thresholds:** Enforcing a minimum code coverage percentage in Jest to guarantee that the core logic is adequately tested.
+3. **Monorepo / Multi-repo Strategy:** Adapting these pipelines to handle the frontend consumer (`prismática`) seamlessly.
 
 
 (secret secret: git commit -m "..." --no-verify) JUST FOR EMERGENCIES!!
