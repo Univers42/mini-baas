@@ -327,7 +327,7 @@ ensure-backend-deps:
 #  🛡️ GIT HOOKS
 # ============================================
 
-.PHONY: install-hooks
+.PHONY: install-hooks, configure-hooks
 
 install-hooks: ## 🛡️ Install Native Git Pre-push Hooks (Host-side)
 	$(call step,$(BLUE)ℹ,Installing DevOps Shield (Pre-push)...)
@@ -378,6 +378,25 @@ install-hooks: ## 🛡️ Install Native Git Pre-push Hooks (Host-side)
 	# Make the hook executable
 	@chmod +x .git/hooks/pre-push
 	$(call step,$(GREEN)✓,DevOps Pre-push Shield active!)
+
+HOOKS_DIR := vendor/scripts/hooks
+
+configure-hooks:  ## 🪝 Activate git hooks (auto-runs on make / make dev)
+	@if [ ! -d .git ]; then \
+		echo -e "  $(YELLOW)⚠$(NC)  Not a git repo — skipping hook setup"; \
+	else \
+		CURRENT=$$(git config --local core.hooksPath 2>/dev/null || echo ""); \
+		if [ "$$CURRENT" = "$(HOOKS_DIR)" ]; then \
+			echo -e "  $(GREEN)✓$(NC)  Git hooks active (core.hooksPath → $(HOOKS_DIR))"; \
+		else \
+			git config --local core.hooksPath $(HOOKS_DIR); \
+			chmod +x $(HOOKS_DIR)/*; \
+			echo -e "  $(GREEN)✓$(NC)  Git hooks activated (core.hooksPath → $(HOOKS_DIR))"; \
+		fi; \
+		for old in commit-msg pre-commit pre-push post-checkout pre-merge-commit log_hook log_hook.sh; do \
+			if [ -L ".git/hooks/$$old" ]; then rm -f ".git/hooks/$$old"; fi; \
+		done; \
+	fi
 
 # ============================================
 #  ✅ QUALITY & PHASE 0 CHECKS
